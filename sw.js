@@ -2,7 +2,7 @@
    picture is kept the first time it's used (or all at once, from settings). The page itself and version.json are
    asked for fresh every time and only come from here with no connection. build.py stamps V, so a new version of
    the game is a new version of this file, and the browser installs it on the next visit. */
-const V = "40fcec4ba6";
+const V = "597b2e5538";
 const CORE = "network-core-" + V, PICS = "network-assets";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "css/style.css?v=" + V, "js/data.js?v=" + V, "js/fx.js?v=" + V, "js/game.js?v=" + V,
   "assets/asset_index.json", "assets/img/cult_coin.png", "assets/img/cancel.png",

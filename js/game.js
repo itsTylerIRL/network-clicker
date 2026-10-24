@@ -1917,7 +1917,12 @@ function renderAcct(box){
     '<span class="note">sign in to play your network on any device and get on the leaderboards. the same sign-in as the cancel is coming.</span>';
   box.querySelectorAll("[data-sso]").forEach(b=>b.onclick = ()=>signIn(b.dataset.sso));
 }
-function renderAcctAll(){ renderAcct($("acct-title")); renderAcct($("acct-set")); renderAcct($("acct-boards")); }
+function renderAcctAll(){
+  renderAcct($("acct-title")); renderAcct($("acct-set")); renderAcct($("acct-boards"));
+  // who's playing, under their milady: there in any screenshot of the game
+  const who = $("you-who"), a = online() && acct();
+  if(who && who.dataset.h !== (a ? a.handle : "")){ who.dataset.h = a ? a.handle : ""; who.innerHTML = a ? whoTag(a.handle) : ""; }
+}
 
 /* ---------- the boards ---------- */
 const BOARD_INFO = {
@@ -2012,6 +2017,7 @@ function showEnding(){
   ov.id = "ending";
   ov.innerHTML = '<div class="end-in">'+lines.map((l,i)=>'<p style="--d:'+(0.6+i*2.1)+'s">'+l+'</p>').join("")+
     '<h1 style="--d:'+(0.6+lines.length*2.1+0.6)+'s">the new internet is online<span class="cursor">_</span></h1>'+
+    (online() && acct() ? '<div class="end-who" style="--d:'+(0.6+lines.length*2.1+1.6)+'s">'+whoTag(acct().handle)+'</div>' : "")+
     '<div class="end-stats" style="--d:'+(0.6+lines.length*2.1+2.2)+'s">'+
       [["day", dayCount()], ["runs", runs], ["market cycles", fmt(S.stats.cycles)], ["posts", fmt(S.stats.clicks)], ["miladys met", fmt(met)], ["relics", Object.keys(S.relics).length+" / "+RELICS.length], ["played", fmtTime(S.stats.played)]]
         .map(([k,v])=>'<div><span>'+k+'</span><b>'+v+'</b></div>').join("")+'</div>'+
