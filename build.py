@@ -54,8 +54,8 @@ html = swap(html, '<script src="js/fx.js"></script>\n', "")
 html = swap(html, '<script src="js/game.js"></script>', "<script>\n" + script + "\n</script>")
 sister = "assets/img/cancel.png"  # the companion game's badge, in the title screen and the header
 html = swap(html, 'src="%s"' % sister, 'src="%s"' % data_uri(sister))
-icon = "assets/icons/icon-192.png"
-html = swap(html, 'href="%s"' % icon, 'href="%s"' % data_uri(icon))
+for icon in ("assets/icons/favicon-32.png", "assets/icons/icon-192.png"):
+    html = swap(html, 'href="%s"' % icon, 'href="%s"' % data_uri(icon))
 
 (ROOT / "dist.html").write_text(html, "utf8")
 print("dist.html: %.1f MB, %d inlined assets, version %s" % (len(html.encode()) / 1e6, len(files), stamp))
