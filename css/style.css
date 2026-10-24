@@ -294,7 +294,7 @@ body.nobg #bg-canvas{display:none;}
 #fx-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:125;pointer-events:none;display:block;}
 body{--ph:139,233,253;}
 body[data-phase="accum"]{--ph:80,250,123;} body[data-phase="mania"]{--ph:241,250,140;}
-body[data-phase="dist"]{--ph:255,184,108;}  body[data-phase="bear"]{--ph:160,130,255;}
+body[data-phase="dist"]{--ph:255,184,108;}  body[data-phase="bear"]{--ph:255,85,85;}
 
 /* each phase has its own weather. Tiles divide 600px and every layer moves exactly 600px, so the loop never jumps. */
 #weather{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;opacity:.5;transition:opacity 1.5s;}
@@ -317,18 +317,20 @@ body[data-phase="mania"] #weather::after{opacity:1;background-image:radial-gradi
 /* distribution: confetti changing hands, sliding sideways */
 body[data-phase="dist"] #weather::before{opacity:1;background-image:radial-gradient(circle,rgba(255,184,108,.9) 0 2px,transparent 2.5px),radial-gradient(circle,rgba(255,121,198,.85) 0 1.6px,transparent 2.2px),radial-gradient(circle,rgba(139,233,253,.8) 0 1.4px,transparent 2px);
   background-size:200px 150px,150px 200px,120px 120px;background-position:0 0,70px 40px,30px 90px;animation:w-left 18s linear infinite;}
-/* bear market: snow, falling, and the edges close in */
-body[data-phase="bear"] #weather::before{opacity:1;background-image:radial-gradient(circle,rgba(230,235,255,.85) 0 1.8px,transparent 2.6px);
-  background-size:150px 120px;animation:w-down 22s linear infinite;}
-body[data-phase="bear"] #weather::after{opacity:.7;background-image:radial-gradient(circle,rgba(200,210,255,.6) 0 1px,transparent 2px);
-  background-size:100px 75px;background-position:40px 30px;animation:w-down 36s linear infinite;}
+/* bear market: red candles, coming down, and the edges run red */
+body[data-phase="bear"] #weather::before{opacity:1;background-image:linear-gradient(180deg,transparent 0 40%,rgba(255,85,85,.5) 49%,rgba(255,170,170,.8) 50%,transparent 51%);
+  background-size:150px 200px;-webkit-mask-image:linear-gradient(90deg,transparent 0 49%,#000 49% 51%,transparent 51%);mask-image:linear-gradient(90deg,transparent 0 49%,#000 49% 51%,transparent 51%);
+  -webkit-mask-size:150px 200px;mask-size:150px 200px;animation:w-down 4s linear infinite;}
+body[data-phase="bear"] #weather::after{opacity:.75;background-image:linear-gradient(90deg,transparent 0 46%,rgba(255,85,85,.55) 46% 54%,transparent 54%);
+  background-size:120px 200px;background-position:40px 0;-webkit-mask-image:linear-gradient(180deg,transparent 0 30%,#000 30% 58%,transparent 58%);mask-image:linear-gradient(180deg,transparent 0 30%,#000 30% 58%,transparent 58%);
+  -webkit-mask-size:120px 200px;mask-size:120px 200px;-webkit-mask-position:40px 0;mask-position:40px 0;animation:w-down 10s linear infinite;}
 
 /* a faint grade over everything, in the phase's color */
 #grade{position:fixed;inset:0;z-index:120;pointer-events:none;transition:background 2s,box-shadow 2s;}
 body[data-phase="accum"] #grade{background:linear-gradient(180deg,rgba(80,250,123,.03),transparent 40%);}
 body[data-phase="mania"] #grade{background:linear-gradient(180deg,rgba(255,220,120,.06),rgba(255,160,60,.02) 50%,transparent);}
 body[data-phase="dist"]  #grade{background:linear-gradient(180deg,rgba(255,150,120,.04),rgba(255,121,198,.03));}
-body[data-phase="bear"]  #grade{background:linear-gradient(180deg,rgba(60,50,170,.10),rgba(20,10,70,.14));box-shadow:inset 0 0 160px 30px rgba(4,2,20,.85);}
+body[data-phase="bear"]  #grade{background:linear-gradient(180deg,rgba(255,60,60,.05),rgba(255,40,40,.10));box-shadow:inset 0 0 150px 20px rgba(150,0,20,.45);}
 /* research: a scan passes down the screen */
 #grade::after{content:"";position:absolute;left:0;right:0;top:-12%;height:12%;opacity:0;
   background:linear-gradient(180deg,transparent,rgba(189,147,249,.16) 70%,rgba(220,200,255,.55) 98%,transparent);}

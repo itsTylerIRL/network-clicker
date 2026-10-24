@@ -3,7 +3,7 @@
    The backdrop is the network itself: faint strangers drifting by, and one brighter node for every milady you
    have, in her job's color, threaded to the ones near her. Signals run down the threads, more of them the
    bigger the network gets and every time you post. The market sets the weather: accumulation grows up slowly,
-   mania rockets, distribution slides sideways, a bear market sinks and goes cold.
+   mania rockets, distribution slides sideways, a bear market comes down in red.
 
    The other canvas sits over everything and only holds what's thrown: petals when you post, confetti when you
    build, a starburst when you catch a sparkle. */
@@ -19,7 +19,7 @@ const FX = (()=>{
     accum: { c:hex("#50fa7b"), energy:0.8,  vx:-3,  vy:-6 },
     mania: { c:hex("#f1fa8c"), energy:1.9,  vx:-4,  vy:-26 },
     dist:  { c:hex("#ffb86c"), energy:1.2,  vx:-20, vy:1.5 },
-    bear:  { c:[150,120,255],  energy:0.5,  vx:-1.5,vy:11 },
+    bear:  { c:hex("#ff5555"), energy:1.1,  vx:-3, vy:22 },
   };
   const st = () => (typeof S!=="undefined" && S) || null; // game.js's state: a top-level let, so not on window
   const calm = () => !!(st() && S.settings.calm);

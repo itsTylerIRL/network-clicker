@@ -422,5 +422,5 @@ const FEED = {
   accum: ["quiet out there. good time to read.", "someone is building something in a group chat.", "the charts are flat. the lore isn't."],
   mania: ["everything is going up. everyone is a genius.", "a stranger asks what a milady is.", "the timeline is loud today."],
   dist:  ["people are cashing out and posting about it.", "it's all clout now.", "a lot of new accounts. most won't stay."],
-  bear:  ["it's cold. post through it.", "the tourists left. the lore is still here.", "nobody's buying. everybody's reading."],
+  bear:  ["red candles all day. post through it.", "the tourists left. the lore is still here.", "nobody's buying. everybody's reading."],
 };
