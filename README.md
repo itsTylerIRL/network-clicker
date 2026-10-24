@@ -35,6 +35,10 @@ Saves can't be downloaded, pasted or loaded from a file any more, since that wou
 
 It installs as an app (or add it to your home screen) and plays offline: the page and code are kept by a service worker, and settings can keep every trait picture (about 11 MB) so new Miladys look right with no connection. An installed copy keeps them on its own. Notifications are off until you turn them on, and then only arrive while the game's in a background tab: a raid home, a ritual ready, storage full, grass to touch, a stage of the new internet done.
 
+## Ambient mode
+
+For a screen the game is left up on. After a few minutes with nobody touching anything (1, 3 or 10, or never, in settings), or straight away from the 📺 button, the game steps aside and the network is shown at work: every Milady and Remilio drawn whole from her trait layers (no backgrounds), standing with the others on her job around you, while you doze in the middle. Each crowd sends its resource flying down into a live strip along the bottom, vibes fly back out to feed everyone, and whatever gets spent (by you, the robots, or poured into the new internet, whose progress rings round you) leaves the strip in a burst. Mods send hearts, the idle doze, raiders are off on their own, newcomers pop in, the feed runs as a ticker, and the clock is the real one. A wide screen gets a ring of crowds, a tall one a grid; it keeps the screen awake, and drifts a few pixels over minutes so nothing burns in. A key, a click or a real move of the mouse brings the game back, and doesn't do anything else.
+
 ## Controls
 
 Mouse and touch do everything. On a phone, once your Milady scrolls out of view she floats in the corner so you can keep posting, and the tabs swipe sideways.

@@ -35,13 +35,14 @@ script = "\n".join([
     (ROOT / "js/data.js").read_text("utf8"),
     (ROOT / "js/fx.js").read_text("utf8"),
     (ROOT / "js/game.js").read_text("utf8"),
+    (ROOT / "js/ambient.js").read_text("utf8"),
 ])
 
 # Stamp the page with a version made from the code itself, so a browser never runs an old script against a new
 # page: index.html asks for js/game.js?v=<stamp>, and version.json lets an open tab notice that it has gone stale.
-stamp = hashlib.sha256(b"".join((ROOT / f).read_bytes() for f in ("js/data.js", "js/fx.js", "js/game.js", "css/style.css"))).hexdigest()[:10]
+stamp = hashlib.sha256(b"".join((ROOT / f).read_bytes() for f in ("js/data.js", "js/fx.js", "js/game.js", "js/ambient.js", "css/style.css"))).hexdigest()[:10]
 page = (ROOT / "index.html").read_text("utf8")
-stamped = re.sub(r'(href="css/style\.css|src="js/data\.js|src="js/fx\.js|src="js/game\.js)(\?v=[0-9a-f]+)?"', lambda m: m.group(1) + "?v=" + stamp + '"', page)
+stamped = re.sub(r'(href="css/style\.css|src="js/data\.js|src="js/fx\.js|src="js/game\.js|src="js/ambient\.js)(\?v=[0-9a-f]+)?"', lambda m: m.group(1) + "?v=" + stamp + '"', page)
 if stamped != page:
     (ROOT / "index.html").write_text(stamped, "utf8")
 (ROOT / "version.json").write_text(json.dumps({"v": stamp}) + "\n", "utf8")
@@ -56,6 +57,7 @@ html = swap(html, '<link rel="stylesheet" href="css/style.css">',
             "<style>\n" + (ROOT / "css/style.css").read_text("utf8") + "</style>")
 html = swap(html, '<script src="js/data.js"></script>\n', "")
 html = swap(html, '<script src="js/fx.js"></script>\n', "")
+html = swap(html, '<script src="js/ambient.js"></script>', "")
 html = swap(html, '<script src="js/game.js"></script>', "<script>\n" + script + "\n</script>")
 sister = "assets/img/cancel.png"  # the companion game's badge, in the title screen and the header
 html = swap(html, 'src="%s"' % sister, 'src="%s"' % data_uri(sister))

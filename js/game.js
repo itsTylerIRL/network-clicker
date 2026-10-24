@@ -1478,6 +1478,7 @@ function openSettings(){
     '<div class="set-row"><span>numbers</span><span class="seg">'+Object.keys(NOTATIONS).map(k=>'<button class="pick'+((S.settings.num||"short")===k ? " on" : "")+'" data-num="'+k+'">'+NOTATIONS[k]+'</button>').join("")+'</span></div>'+
     '<div class="set-row"><span>your milady</span><button class="btn small" id="set-reroll">reroll her</button></div>'+
     '<div class="set-row"><span>effects volume</span><input id="set-vol" type="range" min="0" max="100" value="'+(S.settings.vol!=null ? S.settings.vol : 70)+'"></div>'+
+    '<div class="set-row"><span>📺 ambient mode, when nobody\'s touched anything for</span><span class="seg">'+Object.keys(AMBIENT_AFTER).map(k=>'<button class="pick'+((S.settings.ambient||"3")===k ? " on" : "")+'" data-amb="'+k+'">'+(k==="off" ? "never" : k+" min")+'</button>').join("")+'</span></div>'+
     '<div class="set-row"><span>her face reacts</span><button class="tog'+(S.settings.faces!==false ? " on" : "")+'" id="set-faces">'+(S.settings.faces!==false ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>wear your relics</span><button class="tog'+(S.settings.wear!==false ? " on" : "")+'" id="set-wear">'+(S.settings.wear!==false ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>notifications<br><span class="note">only while the game\'s in a background tab</span></span><button class="tog'+(S.settings.notifyOn ? " on" : "")+'" id="set-notify">'+(S.settings.notifyOn ? "on" : "off")+'</button></div>'+
@@ -1495,6 +1496,7 @@ function openSettings(){
   $("set-vol").oninput = e=>{ S.settings.vol = +e.target.value; };
   $("set-vol").onchange = ()=>sfx.post();
   $("set-wear").onclick = ()=>{ S.settings.wear = S.settings.wear===false; drawYou(); openSettings(); };
+  document.querySelectorAll("#modal [data-amb]").forEach(b=>b.onclick = ()=>{ S.settings.ambient = b.dataset.amb; openSettings(); });
   $("set-faces").onclick = ()=>{ S.settings.faces = S.settings.faces===false; face = null; faceTick(); openSettings(); };
   $("set-notify").onclick = ()=>{ if(S.settings.notifyOn){ S.settings.notifyOn = false; openSettings(); } else askNotify(); };
   document.querySelectorAll("#modal [data-notify]").forEach(b=>b.onclick = ()=>{ const k = b.dataset.notify; S.settings.notify[k] = !S.settings.notify[k]; openSettings(); });
@@ -2066,6 +2068,16 @@ async function keepOffline(quietly){
   }catch(e){ offlineState = ""; if(!quietly) toast("couldn't keep them all. try again with a connection."); }
 }
 
+/* ---------- ambient: the network at work, for a screen left up all day (js/ambient.js) ---------- */
+const AMBIENT_AFTER = { off:0, "1":60, "3":180, "10":600 };
+let lastActive = Date.now();
+function ambientCheck(){
+  const wait = AMBIENT_AFTER[S && S.settings.ambient || "3"];
+  if(!wait || !S || !S.started || AMBIENT.on || document.hidden || $("ending") || !$("screen-main").classList.contains("active")) return;
+  if(Date.now() - lastActive > wait*1000){ closeModal(); hideTip(); AMBIENT.start(); }
+}
+function ambientBack(){ lastActive = Date.now(); refresh(true); }
+
 /* ---------- the ending ---------- */
 function showEnding(){
   if($("ending")) return;
@@ -2140,6 +2152,9 @@ async function init(){
   else { show("screen-title"); drawYou(); }
   setInterval(frame, 150);
   setInterval(faceTick, 100); warmFaces();
+  setInterval(ambientCheck, 1000);
+  for(const ev of ["pointermove", "pointerdown", "keydown", "wheel", "touchstart"]) addEventListener(ev, ()=>{ lastActive = Date.now(); }, { passive:true, capture:true });
+  document.querySelectorAll(".tv").forEach(b=>b.onclick = e=>{ e.stopPropagation(); AMBIENT.start(); });
   for(const ev of ["pointerdown", "keydown"]) addEventListener(ev, ()=>{ lastTouch = Date.now(); }, { passive:true });
   checkVersion(); setInterval(checkVersion, 5*60*1000);
   checkNet(); renderAcctAll();
