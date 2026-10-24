@@ -832,6 +832,11 @@ async function checkVersion(){
 }
 
 /* ---------- start ---------- */
+/* the interface is laid out for 1440x900; a bigger window scales it up (never down, and at most 1.6x) */
+function fitUI(){
+  const k = Math.max(1, Math.min(1.6, innerWidth/1440, innerHeight/900));
+  document.documentElement.style.setProperty("--ui", k.toFixed(3));
+}
 function show(id){
   document.querySelectorAll(".screen").forEach(s=>s.classList.toggle("active", s.id===id));
 }
@@ -861,6 +866,7 @@ async function init(){
   S = load();
   if(!S){ S = fresh(); }
   syncLook(); FX.start();
+  fitUI(); addEventListener("resize", fitUI);
   if(!S.you) S.you = rollLook();
   // the bindings
   $("you-wrap").addEventListener("click", post);

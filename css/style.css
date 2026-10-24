@@ -7,7 +7,7 @@
   --mono:'JetBrains Mono','Fira Mono','Menlo','Consolas',monospace;
   --label:'Share Tech Mono','JetBrains Mono','Fira Mono','Menlo','Consolas',monospace;
   --stage:radial-gradient(circle at 50% 40%,rgba(139,233,253,.30) 0%,rgba(139,233,253,.10) 42%,rgba(139,233,253,.02) 70%,transparent 78%),#010506;
-  --r:5px; --btnh-s:32px; --btnh:40px; --btnh-l:50px;
+  --ui:1; --r:5px; --btnh-s:32px; --btnh:40px; --btnh-l:50px;
   --btn-t:background .15s,border-color .15s,color .15s,box-shadow .15s,transform .08s,filter .08s;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
@@ -126,8 +126,16 @@ h1.game-title .is{color:var(--neon);text-shadow:0 0 18px rgba(139,233,253,.9);di
 @media (min-width:821px){
   #screen-main.active,#screen-title.active{display:flex;flex-direction:column;justify-content:safe center;min-height:100vh;min-height:100dvh;}
   #screen-main.active>*{flex:none;}
+  /* in the game, use the window: as wide as it is (up to a very big monitor) and as tall, less the header and hint */
+  /* the corner brackets keep a 40px gutter each side */
+  #app:has(#screen-main.active){max-width:min(2200px * var(--ui), 100vw - 80px);}
+  #screen-main.active>.layout{flex:1 1 0;min-height:620px;}
+  /* a big window: the whole interface scales up with it (--ui is set from the window size in game.js), like the cancel's */
+  #screen-main.active,#screen-title.active .title-wrap,#modal-panel{zoom:var(--ui);}
+  #screen-main.active,#screen-title.active{min-height:calc(100vh / var(--ui));min-height:calc(100dvh / var(--ui));}
+  #modal-panel{max-height:calc(86vh / var(--ui));}
   .title-wrap{padding-top:0;}
-  .layout{height:max(620px,67vh);height:max(620px,67dvh);grid-template-rows:minmax(0,1fr);align-items:stretch;}
+  .layout{grid-template-columns:clamp(300px,21vw,380px) minmax(0,1fr);grid-template-rows:minmax(0,1fr);align-items:stretch;}
   .side{position:static;min-height:0;overflow-y:auto;}
   .side>.box{flex:none;}
   #log-box{flex:1 1 0;min-height:90px;display:flex;flex-direction:column;}
@@ -136,8 +144,8 @@ h1.game-title .is{color:var(--neon);text-shadow:0 0 18px rgba(139,233,253,.9);di
   #tabs{flex:none;}
   #tab-body{flex:1;min-height:0;overflow-y:auto;padding-right:4px;}
   /* her picture beside the post button, so the feed keeps its room */
-  .side #you-box{display:grid;grid-template-columns:118px 1fr;gap:6px 12px;align-items:center;text-align:left;}
-  .side #you-wrap{grid-row:1/4;width:118px;margin:0;}
+  .side #you-box{display:grid;grid-template-columns:minmax(118px,40%) 1fr;gap:6px 12px;align-items:center;text-align:left;}
+  .side #you-wrap{grid-row:1/4;width:100%;margin:0;}
   .side .post-val{margin:0;align-self:end;}
   .side .buffs{justify-content:flex-start;margin:0;}
   .side #btn-meme{align-self:start;padding:8px 4px;font-size:10.5px;letter-spacing:0;white-space:nowrap;}
