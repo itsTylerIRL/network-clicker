@@ -1,6 +1,6 @@
 :root{
   /* tylerirl.com: black, one cyan accent, Dracula colors for meaning, monospace everywhere (same as cancel.tylerirl.com) */
-  --bg:#000000; --panel:rgba(0,0,0,.3); --glass:rgba(0,0,0,.22); --line:rgba(139,233,253,.22);
+  --bg:#000000; --panel:rgba(0,0,0,.1); --glass:rgba(0,0,0,.2); --line:rgba(139,233,253,.22);
   --neon:#8be9fd; --neon2:#eaeaea; --acid:#50fa7b; --gold:#f1fa8c;
   --pink:#ff79c6; --lilac:#bd93f9; --orange:#ffb86c; --red:#ff5555;
   --txt:#eaeaea; --dim:#7c8a90;
@@ -49,8 +49,9 @@ a{color:var(--neon);}
 .row{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:14px;flex-wrap:wrap;}
 
 /* surfaces: thin cyan lines on near-black glass */
-/* glass, as on the rest of tylerirl.com: dark at 30%, a 12px blur, a cyan edge lit white along the top and left */
-.panel,.box{background:var(--panel);backdrop-filter:blur(12px) saturate(120%);-webkit-backdrop-filter:blur(12px) saturate(120%);
+/* glass, after the rest of tylerirl.com: a cyan edge lit white along the top and left. Thin enough that the network,
+   and the market's weather, show through behind it: a light tint and a slight blur, and the text gets a shadow instead */
+.panel,.box{background:var(--panel);backdrop-filter:blur(2.5px) saturate(130%);-webkit-backdrop-filter:blur(2.5px) saturate(130%);
   border:1px solid rgba(139,233,253,.25);border-top-color:rgba(255,255,255,.15);border-left-color:rgba(255,255,255,.1);border-radius:16px;
   box-shadow:0 4px 24px rgba(0,0,0,.3),0 8px 32px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.1),inset 0 0 20px rgba(139,233,253,.03);}
 .panel{padding:18px;}
@@ -408,3 +409,7 @@ body.frenzy #you-wrap::after{content:"";position:absolute;inset:-9px;border-radi
 body.calm #weather,body.calm #phase-banner{display:none;}
 body.calm #you-wrap,body.calm #you,body.calm .card,body.calm .card::before,body.calm .mil,body.calm #tab-body .card,body.calm #tab-body .job,
 body.calm .res-row .rbar u,body.calm #log .ln,body.calm h1.game-title .is,body.calm::before,body.calm #grade{animation:none!important;}
+
+/* text over thin glass: a soft dark halo keeps it legible whatever is drifting past behind it */
+.box,.panel,#topbar,.hint{text-shadow:0 0 6px rgba(0,0,0,.9),0 1px 2px rgba(0,0,0,.8);}
+.btn.big:hover,.pick.on{text-shadow:none;}
