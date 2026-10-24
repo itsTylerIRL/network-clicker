@@ -9,27 +9,43 @@
      clickRate      a post also pays this many seconds of your vibes production
      autoclick      posts per second, for you      sparkle        +x how often sparkles turn up
      costMult.tech  +x research prices (negative is cheaper)
+     idle.<res>     +N per second for every milady with no job
+     capAll         +x storage of everything       housingMult    +x room everywhere
+     arrive         +x how fast miladys turn up    remilio        +x what a remilio makes, over a milady
+     ritualCost / ritualCd   +x ritual prices / cooldowns (negative is cheaper / sooner)
+     raidSpeed      +x how fast raids come home    relicChance    +x the odds a raid brings a relic home
+     wonderCost     +x cathedral prices            grass          +x grass when you touch it
+     grassEach      +x what each grass you hold is worth
+     autoassign     new arrivals go straight to work (the miladys tab says at what)
+
+   ng: how many times you must have touched grass before something exists at all. Every reset opens a layer.
 */
 
 const RES = [
-  { id:"vibes", name:"vibes", icon:"🌸", color:"#ff79c6", cap:500,  desc:"what the network runs on. every milady eats some." },
-  { id:"memes", name:"memes", icon:"🐸", color:"#50fa7b", cap:200,  desc:"what the network is built out of." },
-  { id:"cult",  name:"$CULT", icon:"coin", color:"#f1fa8c", cap:100, desc:"money. traders make it." },
-  { id:"lore",  name:"lore",  icon:"📜", color:"#bd93f9", cap:250,  desc:"spend it on research." },
-  { id:"drip",  name:"drip",  icon:"💧", color:"#8be9fd", cap:50,   desc:"taste, distilled. artists make it." },
-  { id:"clout", name:"clout", icon:"📣", color:"#ffb86c", cap:100,  desc:"people paying attention. streamers make it." },
+  { id:"vibes",   name:"vibes",    icon:"🌸", color:"#ff79c6", cap:500, desc:"what the network runs on. every milady eats some." },
+  { id:"memes",   name:"memes",    icon:"🐸", color:"#50fa7b", cap:200, desc:"what the network is built out of." },
+  { id:"cult",    name:"$CULT",    icon:"coin", color:"#f1fa8c", cap:100, desc:"money. traders make it.", tech:"wallets" },
+  { id:"lore",    name:"lore",     icon:"📜", color:"#bd93f9", cap:250, desc:"spend it on research.", show:s=>s.b.archive>0 },
+  { id:"drip",    name:"drip",     icon:"💧", color:"#8be9fd", cap:50,  desc:"taste, distilled. artists make it.", tech:"aesthetics" },
+  { id:"clout",   name:"clout",    icon:"📣", color:"#ffb86c", cap:100, desc:"people paying attention. streamers make it.", tech:"streaming" },
+  { id:"compute", name:"compute",  icon:"⚡", color:"#a6e3ff", cap:150, desc:"cycles. devs make it.", tech:"opensource", ng:1 },
+  { id:"devotion",name:"devotion", icon:"🕯️", color:"#ffd27f", cap:100, desc:"faith in the network. acolytes keep it, rituals spend it.", tech:"liturgy", ng:2 },
+  { id:"ether",   name:"ether",    icon:"💠", color:"#c3a6ff", cap:25,  desc:"what the cathedral is made of. seers find it.", tech:"hyperreality", ng:4 },
 ];
 
-const EAT = 0.5; // vibes per second, per milady
+const EAT = 0.5; // vibes per second, per milady at home (one away on a raid eats elsewhere)
 
 const JOBS = [
-  { id:"poster",  name:"poster",     icon:"💬", res:"vibes", rate:1.0,   desc:"posts all day. makes vibes." },
-  { id:"memer",   name:"memer",      icon:"🐸", res:"memes", rate:0.1,   desc:"makes memes." },
-  { id:"keeper",  name:"lorekeeper", icon:"📜", res:"lore",  rate:0.15,  desc:"reads the archive. makes lore.", show:s=>s.b.archive>0 },
-  { id:"trader",  name:"trader",     icon:"📈", res:"cult",  rate:0.06,  desc:"watches charts. makes $CULT.", tech:"wallets" },
-  { id:"artist",  name:"artist",     icon:"🎨", res:"drip",  rate:0.04, desc:"makes drip.", tech:"aesthetics" },
-  { id:"streamer",name:"streamer",   icon:"📣", res:"clout", rate:0.04,  desc:"goes live. makes clout.", tech:"streaming" },
-  { id:"mod",     name:"mod",        icon:"🛡️", res:null,    rate:0,     desc:"keeps the peace: +3% happiness each, and less drama.", tech:"moderation", happy:0.02 },
+  { id:"poster",  name:"poster",     icon:"💬", res:"vibes",   rate:1.0,   desc:"posts all day. makes vibes." },
+  { id:"memer",   name:"memer",      icon:"🐸", res:"memes",   rate:0.1,   desc:"makes memes." },
+  { id:"keeper",  name:"lorekeeper", icon:"📜", res:"lore",    rate:0.15,  desc:"reads the archive. makes lore.", show:s=>s.b.archive>0 },
+  { id:"trader",  name:"trader",     icon:"📈", res:"cult",    rate:0.06,  desc:"watches charts. makes $CULT.", tech:"wallets" },
+  { id:"artist",  name:"artist",     icon:"🎨", res:"drip",    rate:0.04,  desc:"makes drip.", tech:"aesthetics" },
+  { id:"streamer",name:"streamer",   icon:"📣", res:"clout",   rate:0.04,  desc:"goes live. makes clout.", tech:"streaming" },
+  { id:"mod",     name:"mod",        icon:"🛡️", res:null,      rate:0,     desc:"keeps the peace: +3% happiness each, and less drama.", tech:"moderation" },
+  { id:"dev",     name:"dev",        icon:"⌨️", res:"compute", rate:0.04,  desc:"ships code. makes compute.", tech:"opensource", ng:1 },
+  { id:"acolyte", name:"acolyte",    icon:"🕯️", res:"devotion",rate:0.03,  desc:"tends the candles. makes devotion.", tech:"liturgy", ng:2 },
+  { id:"seer",    name:"seer",       icon:"🔮", res:"ether",   rate:0.008, desc:"looks past the timeline. finds ether.", tech:"hyperreality", ng:4 },
 ];
 
 /* cost is the first copy; each copy after costs `ratio` times the last */
@@ -42,16 +58,24 @@ const BUILDINGS = [
     desc:"somewhere to keep lore. lorekeepers work here.", show:s=>s.seen.memes>=10 },
   { id:"drive",     name:"cloud drive",    cost:{memes:40}, ratio:1.35, fx:{"cap.vibes":500, "cap.memes":200, "cap.cult":50},
     desc:"more storage.", show:s=>s.seen.memes>=25 },
+  { id:"memefarm",  name:"meme farm",      cost:{memes:80, cult:20}, ratio:1.15, fx:{"rate.memes":0.2},
+    desc:"a folder that fills itself.", tech:"memetics" },
+  { id:"telegram",  name:"telegram group", cost:{vibes:600, memes:120}, ratio:1.28, fx:{housing:3},
+    desc:"room for 3 more miladys. nobody reads the pinned message.", tech:"groupdynamics" },
   { id:"wallet",    name:"cold wallet",    cost:{memes:50, cult:10}, ratio:1.3, fx:{"cap.cult":200},
     desc:"holds $CULT.", tech:"wallets" },
   { id:"discord",   name:"discord server", cost:{memes:200, cult:50}, ratio:1.3, fx:{housing:5},
     desc:"room for 5 more miladys.", tech:"servers" },
   { id:"desk",      name:"trading desk",   cost:{memes:120, cult:30}, ratio:1.15, fx:{"job.trader":0.12, "cap.cult":50},
     desc:"traders make 12% more.", tech:"charts" },
+  { id:"merch",     name:"merch store",    cost:{memes:250, drip:20}, ratio:1.15, fx:{"rate.cult":0.15, "cap.cult":80},
+    desc:"hoodies. it makes $CULT by itself.", tech:"merch" },
   { id:"studio",    name:"studio",         cost:{memes:150, cult:60}, ratio:1.15, fx:{"job.artist":0.1, "cap.drip":60},
     desc:"artists make 10% more, and more room for drip.", tech:"aesthetics" },
   { id:"stage",     name:"stream setup",   cost:{cult:100, drip:20}, ratio:1.15, fx:{"job.streamer":0.1, "cap.clout":100},
     desc:"streamers make 10% more, and more room for clout.", tech:"streaming" },
+  { id:"library",   name:"library",        cost:{memes:300, cult:80}, ratio:1.2, fx:{"cap.lore":600, "mult.lore":0.05},
+    desc:"a lot more room for lore.", tech:"archivism" },
   { id:"shrine",    name:"shrine",         cost:{memes:100, drip:30}, ratio:1.2, fx:{happy:0.04},
     desc:"network spirituality. +4% happiness.", tech:"spirituality" },
   { id:"rig",       name:"ai rig",         cost:{cult:200, drip:40}, ratio:1.15, fx:{all:0.06},
@@ -60,17 +84,40 @@ const BUILDINGS = [
     desc:"an irl house. room for 8 more.", tech:"irl" },
   { id:"billboard", name:"billboard",      cost:{cult:200, clout:50}, ratio:1.15, fx:{"mult.vibes":0.15, "mult.clout":0.05},
     desc:"+15% vibes, +5% clout.", tech:"marketing" },
+  { id:"podcast",   name:"podcast studio", cost:{cult:300, drip:50}, ratio:1.15, fx:{"rate.clout":0.05, "job.streamer":0.05, "cap.clout":60},
+    desc:"three hours a week of nothing. it makes clout by itself.", tech:"marketing" },
+  { id:"warehouse", name:"warehouse",      cost:{memes:1500, cult:1500, lore:1500}, ratio:1.35, fx:{capAll:0.1},
+    desc:"+10% room for everything.", tech:"infrastructure" },
   { id:"garden",    name:"the garden",     cost:{cult:1500, drip:250, clout:250}, ratio:1.25, fx:{all:0.05, happy:0.05, grass:0.1},
     desc:"it's infinite. +5% everything, +5% happiness, +10% grass when you touch it.", tech:"garden" },
+  // the stack (after your first grass)
+  { id:"rack",      name:"server rack",    cost:{memes:600, cult:400}, ratio:1.18, fx:{"cap.compute":150, "job.dev":0.1},
+    desc:"room for compute, and devs make 10% more.", tech:"opensource", ng:1 },
+  { id:"gpu",       name:"gpu cluster",    cost:{cult:800, compute:40}, ratio:1.2, fx:{all:0.04},
+    desc:"everything makes 4% more.", tech:"inference", ng:1 },
+  { id:"datacenter",name:"data center",    cost:{cult:3000, compute:200, drip:200}, ratio:1.25, fx:{"rate.compute":0.5, "cap.compute":500},
+    desc:"it makes compute by itself. a lot of room for it.", tech:"scaling", ng:1 },
+  // network spirituality (after your second)
+  { id:"chapel",    name:"chapel",         cost:{memes:800, drip:60}, ratio:1.2, fx:{"cap.devotion":100, "job.acolyte":0.1},
+    desc:"room for devotion, and acolytes make 10% more.", tech:"liturgy", ng:2 },
+  { id:"iconwall",  name:"icon wall",      cost:{drip:200, devotion:40}, ratio:1.2, fx:{happy:0.03, "mult.devotion":0.05},
+    desc:"+3% happiness, +5% devotion.", tech:"iconography", ng:2 },
+  // the cathedral (after your fourth)
+  { id:"observatory",name:"observatory",   cost:{cult:2000, ether:15}, ratio:1.22, fx:{"cap.ether":40, "job.seer":0.1},
+    desc:"room for ether, and seers make 10% more.", tech:"hyperreality", ng:4 },
 ];
 
 const TECHS = [
   { id:"wallets",      name:"wallets",           cost:{lore:30},
     desc:"traders, and cold wallets to keep $CULT in." },
   { id:"memetics",     name:"memetics",          cost:{lore:50}, fx:{"job.memer":0.25},
-    desc:"memers make 25% more." },
+    desc:"memers make 25% more, and meme farms." },
+  { id:"groupdynamics",name:"group dynamics",    cost:{lore:80}, fx:{"idle.vibes":0.15},
+    desc:"telegram groups. and a milady with no job still posts a little: 0.15 vibes a second." },
   { id:"servers",      name:"servers",           cost:{lore:100}, req:["wallets"],
     desc:"discord servers." },
+  { id:"doomscrolling",name:"doomscrolling",     cost:{lore:120}, req:["memetics"], fx:{click:2},
+    desc:"+2 vibes per post." },
   { id:"charts",       name:"charts",            cost:{lore:150, cult:20}, req:["wallets"],
     desc:"trading desks." },
   { id:"compression",  name:"compression",       cost:{lore:200}, req:["memetics"], fx:{"capMult.vibes":0.25, "capMult.memes":0.25},
@@ -79,20 +126,28 @@ const TECHS = [
     desc:"artists, drip and studios." },
   { id:"moderation",   name:"moderation",        cost:{lore:300}, req:["servers"],
     desc:"mods." },
+  { id:"merch",        name:"merch",             cost:{lore:350, cult:50}, req:["charts","aesthetics"],
+    desc:"merch stores." },
   { id:"streaming",    name:"streaming",         cost:{lore:450, drip:10}, req:["aesthetics"],
     desc:"streamers, clout and stream setups." },
+  { id:"lurkers",      name:"lurkers",           cost:{lore:500}, req:["groupdynamics","moderation"], fx:{"idle.vibes":0.25, happy:0.03},
+    desc:"idle miladys post more (0.4 a second all told), and +3% happiness." },
   { id:"spirituality", name:"network spirituality", cost:{lore:600, drip:25}, req:["aesthetics","moderation"],
     desc:"shrines." },
-  { id:"archivism",    name:"archivism",         cost:{lore:900}, req:["compression"], fx:{"capMult.lore":0.5, "mult.lore":0.15},
-    desc:"+50% room for lore, +15% lore." },
   { id:"compute",      name:"compute",           cost:{lore:800, cult:150}, req:["charts"],
     desc:"ai rigs." },
-  { id:"irl",          name:"irl meetups",       cost:{lore:1100, clout:30}, req:["spirituality"],
-    desc:"milady houses. miladys turn up twice as fast.", fx:{arrive:1} },
+  { id:"archivism",    name:"archivism",         cost:{lore:900}, req:["compression"], fx:{"capMult.lore":0.5, "mult.lore":0.15},
+    desc:"libraries, +50% room for lore, +15% lore." },
+  { id:"irl",          name:"irl meetups",       cost:{lore:1100, clout:30}, req:["spirituality"], fx:{arrive:1},
+    desc:"milady houses. miladys turn up twice as fast." },
   { id:"marketing",    name:"marketing",         cost:{lore:1400, clout:60}, req:["streaming"],
-    desc:"billboards." },
+    desc:"billboards and podcast studios." },
+  { id:"irony",        name:"irony poisoning",   cost:{lore:1600, drip:60}, req:["marketing"], fx:{"mult.memes":0.3, "mult.clout":0.1},
+    desc:"+30% memes, +10% clout." },
   { id:"hyperstition", name:"hyperstition",      cost:{lore:2000, drip:100}, req:["compute","marketing"], fx:{all:0.1, sparkle:0.5},
     desc:"+10% everything, and sparkles turn up more." },
+  { id:"infrastructure",name:"infrastructure",   cost:{lore:2500, cult:800}, req:["compute","archivism"], fx:{capAll:0.25},
+    desc:"+25% room for everything, and warehouses." },
   { id:"garden",       name:"the infinite garden", cost:{lore:3000, drip:150, clout:150}, req:["irl","hyperstition"],
     desc:"the garden. and you can touch grass." },
   { id:"postirony",    name:"post-irony",        cost:{lore:4500, clout:300}, req:["garden"], fx:{happy:0.1, "job.poster":0.5},
@@ -101,6 +156,40 @@ const TECHS = [
     desc:"+25% room for miladys everywhere." },
   { id:"accelerate",   name:"accelerationism",   cost:{lore:9000, cult:4000, drip:600}, req:["postirony","september"], fx:{all:0.25, autoclick:5},
     desc:"+25% everything, and you post 5 more times a second." },
+  // the stack
+  { id:"opensource",   name:"open source",       cost:{lore:400}, req:["wallets"], ng:1,
+    desc:"devs, compute and server racks." },
+  { id:"inference",    name:"inference",         cost:{lore:900, compute:30}, req:["opensource"], ng:1, fx:{"job.keeper":0.2},
+    desc:"gpu clusters, and lorekeepers make 20% more." },
+  { id:"agents",       name:"agents",            cost:{lore:1500, compute:80}, req:["inference"], ng:1, fx:{autoassign:1},
+    desc:"new miladys go straight to work: pick their job in the miladys tab." },
+  { id:"scaling",      name:"scaling laws",      cost:{lore:3000, compute:200}, req:["agents"], ng:1, fx:{"mult.compute":0.25},
+    desc:"data centers, and +25% compute." },
+  { id:"alignment",    name:"alignment",         cost:{lore:4000, compute:300}, req:["scaling"], ng:1, fx:{happy:0.1},
+    desc:"+10% happiness." },
+  { id:"singularity",  name:"the singularity",   cost:{lore:12000, compute:1500}, req:["alignment","accelerate"], ng:1, fx:{all:0.5, autoclick:10},
+    desc:"+50% everything, and you post 10 more times a second." },
+  // network spirituality
+  { id:"liturgy",      name:"liturgy",           cost:{lore:600, drip:40}, req:["spirituality"], ng:2,
+    desc:"acolytes, devotion and chapels." },
+  { id:"iconography",  name:"iconography",       cost:{lore:1200, devotion:30}, req:["liturgy"], ng:2,
+    desc:"icon walls, and rituals." },
+  { id:"schism",       name:"schism",            cost:{lore:2500, devotion:80}, req:["iconography"], ng:2, fx:{ritualCost:-0.25},
+    desc:"rituals cost 25% less." },
+  { id:"mass",         name:"the mass",          cost:{lore:5000, devotion:200}, req:["schism","irl"], ng:2, fx:{ritualCd:-0.4},
+    desc:"rituals come back 40% sooner, and the vigil." },
+  // raids
+  { id:"raiding",      name:"raiding",           cost:{lore:1500, clout:100}, req:["marketing"], ng:3,
+    desc:"send miladys out to raid. they come home with loot, and sometimes a relic." },
+  { id:"opsec",        name:"opsec",             cost:{lore:3000, clout:200}, req:["raiding"], ng:3, fx:{raidSpeed:0.25},
+    desc:"raids come home 25% sooner." },
+  { id:"loottables",   name:"loot tables",       cost:{lore:5000, clout:400, cult:1000}, req:["opsec"], ng:3, fx:{relicChance:0.5},
+    desc:"raids are half again as likely to bring home a relic." },
+  // the cathedral
+  { id:"hyperreality", name:"hyperreality",      cost:{lore:6000, clout:400}, req:["garden"], ng:4,
+    desc:"seers, ether and observatories." },
+  { id:"geometry",     name:"sacred geometry",   cost:{lore:9000, ether:20}, req:["hyperreality"], ng:4,
+    desc:"the cathedral of the network." },
 ];
 
 /* bought once */
@@ -110,36 +199,146 @@ const UPGRADES = [
   { id:"templates", name:"meme templates", cost:{memes:60},             fx:{"job.memer":0.25},  desc:"memers make 25% more.", show:s=>s.b.groupchat>0 },
   { id:"replyguy",  name:"reply guy",      cost:{memes:80, cult:20},    fx:{clickMult:1},       desc:"posts make twice as much.", tech:"wallets" },
   { id:"bot",       name:"posting bot",    cost:{memes:120, cult:60},   fx:{autoclick:1},       desc:"posts for you once a second.", tech:"wallets" },
+  { id:"shitpost",  name:"shitposting",    cost:{vibes:1000, memes:200},fx:{click:3},           desc:"+3 vibes per post.", tech:"doomscrolling" },
   { id:"alpha",     name:"alpha group",    cost:{cult:80},              fx:{"job.trader":0.3},  desc:"traders make 30% more.", tech:"charts" },
   { id:"zip",       name:"zip files",      cost:{memes:150, lore:100},  fx:{"capMult.vibes":0.25, "capMult.memes":0.25}, desc:"+25% room for vibes and memes.", tech:"compression" },
   { id:"c2e",       name:"click to earn",  cost:{memes:300, cult:150},  fx:{clickRate:0.05},    desc:"every post also pays 5% of a second of vibes production.", tech:"charts" },
+  { id:"rules",     name:"group chat rules", cost:{cult:120, lore:400}, fx:{happy:0.05},        desc:"+5% happiness.", tech:"moderation" },
   { id:"lighting",  name:"mood lighting",  cost:{cult:50, drip:20},     fx:{happy:0.05},        desc:"+5% happiness.", tech:"aesthetics" },
   { id:"procreate", name:"procreate",      cost:{cult:100, drip:40},    fx:{"job.artist":0.3},  desc:"artists make 30% more.", tech:"aesthetics" },
+  { id:"drop",      name:"merch drop",     cost:{cult:400, drip:50},    fx:{"job.trader":0.25}, desc:"traders make 25% more.", tech:"merch" },
   { id:"monitor",   name:"second monitor", cost:{cult:150, lore:300},   fx:{"mult.lore":0.25},  desc:"+25% lore.", tech:"servers" },
   { id:"obs",       name:"obs scenes",     cost:{drip:30, clout:40},    fx:{"job.streamer":0.3},desc:"streamers make 30% more.", tech:"streaming" },
+  { id:"fanart",    name:"fan art",        cost:{drip:120, clout:60},   fx:{"job.artist":0.3},  desc:"artists make 30% more.", tech:"streaming" },
   { id:"ledger",    name:"ledger",         cost:{cult:200},             fx:{"capMult.cult":0.5},desc:"+50% room for $CULT.", tech:"compute" },
   { id:"botnet",    name:"botnet",         cost:{cult:300, drip:60},    fx:{autoclick:4},       desc:"posts for you 4 more times a second.", tech:"compute" },
   { id:"hug",       name:"group hug",      cost:{drip:60, clout:80},    fx:{happy:0.08},        desc:"+8% happiness.", tech:"spirituality" },
+  { id:"wiki",      name:"lore wiki",      cost:{memes:400, lore:800},  fx:{"mult.lore":0.2},   desc:"+20% lore.", tech:"archivism" },
   { id:"bible",     name:"lore bible",     cost:{memes:500, lore:1500}, fx:{"capMult.lore":0.5},desc:"+50% room for lore.", tech:"archivism" },
+  { id:"boost",     name:"server boost",   cost:{cult:500, clout:100},  fx:{housingMult:0.1},   desc:"+10% room for miladys everywhere.", tech:"irl" },
   { id:"viral",     name:"viral loop",     cost:{memes:800, clout:150}, fx:{"mult.vibes":0.25, "mult.clout":0.1}, desc:"+25% vibes, +10% clout.", tech:"marketing" },
   { id:"hyperpop",  name:"hyperpop",       cost:{cult:600, drip:200, clout:300}, fx:{all:0.1}, desc:"+10% everything.", tech:"hyperstition" },
   { id:"thinkpiece",name:"thinkpiece",     cost:{lore:4000, clout:400}, fx:{clickRate:0.15},    desc:"every post also pays 15% of a second more.", tech:"postirony" },
+  // the stack
+  { id:"copilot",   name:"copilot",        cost:{compute:50, cult:500}, fx:{"job.keeper":0.3},  desc:"lorekeepers make 30% more.", tech:"opensource", ng:1 },
+  { id:"prompts",   name:"prompt engineering", cost:{compute:100, lore:500}, fx:{clickRate:0.1}, desc:"every post also pays 10% of a second more.", tech:"inference", ng:1 },
+  { id:"rlhf",      name:"rlhf",           cost:{compute:200, clout:200}, fx:{happy:0.05, "job.dev":0.2}, desc:"+5% happiness, devs make 20% more.", tech:"agents", ng:1 },
+  { id:"quant",     name:"quantization",   cost:{compute:300, cult:1000}, fx:{"capMult.compute":0.5}, desc:"+50% room for compute.", tech:"scaling", ng:1 },
+  // network spirituality
+  { id:"incense",   name:"incense",        cost:{devotion:50, drip:100}, fx:{"job.acolyte":0.3}, desc:"acolytes make 30% more.", tech:"liturgy", ng:2 },
+  { id:"glass",     name:"stained glass",  cost:{devotion:100, drip:300}, fx:{happy:0.05, "mult.devotion":0.1}, desc:"+5% happiness, +10% devotion.", tech:"iconography", ng:2 },
+  { id:"collective",name:"remilio collective", cost:{devotion:150, cult:1500}, fx:{remilio:0.25}, desc:"remilios make another 25% more than a milady.", tech:"schism", ng:2 },
+  // raids
+  { id:"warroom",   name:"war room",       cost:{clout:300, cult:800},  fx:{raidSpeed:0.15},    desc:"raids come home 15% sooner.", tech:"raiding", ng:3 },
+  { id:"metal",     name:"metal detector", cost:{clout:500, compute:200}, fx:{relicChance:0.25}, desc:"raids are a quarter again as likely to bring home a relic.", tech:"opsec", ng:3 },
+  // the cathedral
+  { id:"scaffold",  name:"scaffolding",    cost:{ether:30, cult:3000},  fx:{wonderCost:-0.15},  desc:"the cathedral costs 15% less.", tech:"geometry", ng:4 },
 ];
 
 /* bought with grass, kept forever. Grass you hold is worth +3% to everything, so spending it is a trade. */
 const GRASS_EACH = 0.03;
 const PERKS = [
-  { id:"headstart", name:"head start",      cost:2, fx:{},              desc:"every run starts with 2 group chats, 2 mood boards and 50 memes." },
-  { id:"muscle",    name:"muscle memory",   cost:2, fx:{clickMult:2},   desc:"posts make 3× as much." },
-  { id:"wellness",  name:"wellness",        cost:4, fx:{happy:0.1},     desc:"+10% happiness." },
-  { id:"sleep",     name:"sleep schedule",  cost:3, fx:{},              desc:"time away counts for up to 24 hours instead of 8." },
-  { id:"golden",    name:"golden hour",     cost:4, fx:{sparkle:1},     desc:"sparkles turn up twice as often." },
-  { id:"landlord",  name:"landlord",        cost:5, fx:{housing:4},     desc:"room for 4 more miladys." },
-  { id:"scholar",   name:"quick learner",   cost:6, fx:{"costMult.tech":-0.2}, desc:"research costs 20% less." },
-  { id:"memory",    name:"long memory",     cost:8, fx:{},              desc:"keep wallets, memetics and servers when you touch grass." },
+  { id:"headstart", name:"head start",      cost:2,  fx:{},              desc:"every run starts with 2 group chats, 2 mood boards and 50 memes." },
+  { id:"muscle",    name:"muscle memory",   cost:2,  fx:{clickMult:2},   desc:"+200% vibes per post." },
+  { id:"sleep",     name:"sleep schedule",  cost:3,  fx:{},              desc:"time away counts for up to 24 hours instead of 8." },
+  { id:"wellness",  name:"wellness",        cost:4,  fx:{happy:0.1},     desc:"+10% happiness." },
+  { id:"golden",    name:"golden hour",     cost:4,  fx:{sparkle:1},     desc:"sparkles turn up twice as often." },
+  { id:"landlord",  name:"landlord",        cost:5,  fx:{housing:4},     desc:"room for 4 more miladys." },
+  { id:"scholar",   name:"quick learner",   cost:6,  fx:{"costMult.tech":-0.2}, desc:"research costs 20% less." },
+  { id:"memory",    name:"long memory",     cost:8,  fx:{},              desc:"keep wallets, memetics and servers when you touch grass." },
+  { id:"overclock", name:"overclock",       cost:5,  fx:{"mult.compute":0.25}, desc:"+25% compute.", ng:1 },
+  { id:"devops",    name:"devops",          cost:6,  fx:{},              desc:"every run starts with open source researched.", ng:1 },
+  { id:"autopilot", name:"autopilot",       cost:10, fx:{},              desc:"every run starts with agents researched, so new miladys go straight to work.", ng:1 },
+  { id:"faithful",  name:"the faithful",    cost:8,  fx:{},              desc:"every run starts with liturgy researched and 100 devotion.", ng:2 },
+  { id:"blessing",  name:"remilia's blessing", cost:6, fx:{},            desc:"half of all new arrivals are remilios.", ng:2 },
+  { id:"scout",     name:"scout",           cost:6,  fx:{raidSpeed:0.3}, desc:"raids come home 30% sooner.", ng:3 },
+  { id:"treasure",  name:"treasure map",    cost:8,  fx:{relicChance:0.25}, desc:"raids are a quarter again as likely to bring home a relic.", ng:3 },
+  { id:"architect", name:"architect",       cost:10, fx:{wonderCost:-0.2}, desc:"the cathedral costs 20% less.", ng:4 },
+  { id:"roots",     name:"deep roots",      cost:15, fx:{grassEach:0.01}, desc:"every grass you hold is worth 4% instead of 3%.", ng:3 },
+  { id:"photo",     name:"photosynthesis",  cost:12, fx:{grass:0.25},    desc:"+25% grass every time you touch it.", ng:2 },
 ];
 
-/* the market goes round. Each phase lasts PHASE_SECS. */
+/* what each reset opens, shown in the grass tab so the next one is something to look forward to */
+const MILESTONES = [
+  { n:1, name:"the stack",            desc:"compute ⚡ and devs. server racks, gpu clusters, data centers. agents put new miladys straight to work. the singularity." },
+  { n:2, name:"network spirituality", desc:"devotion 🕯️ and acolytes, chapels, and rituals. and remilios start joining the network." },
+  { n:3, name:"raids",                desc:"send miladys out raiding. they come home with loot, and relics you keep forever." },
+  { n:4, name:"the cathedral",        desc:"ether 💠 and seers, and a cathedral of the network, ten stages tall." },
+  { n:5, name:"challenges",           desc:"touch grass into a run with the rules bent, for rewards that last." },
+];
+
+/* rituals: spend devotion for something now. cd is the cooldown in seconds. */
+const RITUALS = [
+  { id:"prayer",   name:"group prayer",     icon:"🙏", cost:{devotion:30}, cd:180, desc:"+30% happiness for 2 minutes." },
+  { id:"hyperpost",name:"hyperpost",        icon:"⚡", cost:{devotion:25}, cd:120, desc:"posts make 10× for 30 seconds." },
+  { id:"airdrop",  name:"airdrop",          icon:"🪂", cost:{devotion:50}, cd:300, desc:"two minutes of everything you make, right now." },
+  { id:"meetup",   name:"meetup",           icon:"🫂", cost:{devotion:40}, cd:300, desc:"up to 10 miladys turn up at once, if there's room." },
+  { id:"bull",     name:"summon the bull",  icon:"🐂", cost:{devotion:60}, cd:600, desc:"the market jumps straight to mania." },
+  { id:"vigil",    name:"vigil",            icon:"🕯️", cost:{devotion:80}, cd:600, desc:"+50% everything for 2 minutes.", tech:"mass" },
+];
+
+/* raids: n miladys leave for secs seconds, and come home with `loot` seconds of what you make of those resources.
+   Some may not come back. */
+const RAIDS = [
+  { id:"replies",  name:"the replies",      n:3,  secs:120,  loot:{clout:180, memes:180},          relic:0.06, lose:0,    desc:"easy. somebody said something wrong." },
+  { id:"discord",  name:"a rival discord",  n:6,  secs:300,  loot:{memes:300, cult:300},           relic:0.12, lose:0.08, desc:"they have emotes we don't." },
+  { id:"ct",       name:"crypto twitter",   n:10, secs:600,  loot:{cult:600, clout:600},           relic:0.25, lose:0.12, desc:"loud, rich, and mostly bots." },
+  { id:"timeline", name:"the timeline",     n:20, secs:1200, loot:{vibes:900, memes:900, cult:900, lore:900, drip:900, clout:900}, relic:0.5, lose:0.18, desc:"all of it at once." },
+  { id:"cancel",   name:"the cancel",       n:30, secs:2400, loot:{cult:1800, clout:1800, drip:1800, lore:1800}, relic:1, lose:0.3, desc:"it's coming anyway. go to it. (cancel.tylerirl.com)" },
+];
+
+/* relics come home from raids and are kept forever. Another copy levels one up, to 5. fx is per level. */
+const RELIC_MAX = 5;
+const RELICS = [
+  { id:"hat",      name:"milady hat",       icon:"🧢", fx:{click:2},              desc:"+2 vibes per post" },
+  { id:"coin",     name:"cult coin",        icon:"🪙", fx:{"mult.cult":0.04},     desc:"+4% $CULT" },
+  { id:"light",    name:"pink ring light",  icon:"💡", fx:{"job.poster":0.05},    desc:"posters +5%" },
+  { id:"frog",     name:"frog plush",       icon:"🐸", fx:{"job.memer":0.05},     desc:"memers +5%" },
+  { id:"scroll",   name:"lore scroll",      icon:"📜", fx:{"mult.lore":0.04},     desc:"+4% lore" },
+  { id:"bonkler",  name:"bonkler figurine", icon:"🤖", fx:{all:0.02},             desc:"+2% everything" },
+  { id:"hoodie",   name:"hikki hoodie",     icon:"🧥", fx:{happy:0.02},           desc:"+2% happiness" },
+  { id:"nano",     name:"ledger nano",      icon:"🔐", fx:{"capMult.cult":0.1},   desc:"+10% room for $CULT" },
+  { id:"sticker",  name:"remilio sticker",  icon:"🏷️", fx:{"job.trader":0.05},    desc:"traders +5%" },
+  { id:"palette",  name:"paint palette",    icon:"🎨", fx:{"job.artist":0.06},    desc:"artists +6%" },
+  { id:"deck",     name:"stream deck",      icon:"🎛️", fx:{"job.streamer":0.06},  desc:"streamers +6%" },
+  { id:"hammer",   name:"ban hammer",       icon:"🔨", fx:{happy:0.02},           desc:"+2% happiness" },
+  { id:"chip",     name:"spare gpu",        icon:"🖥️", fx:{"mult.compute":0.05},  desc:"+5% compute" },
+  { id:"rosary",   name:"rosary",           icon:"📿", fx:{"mult.devotion":0.05}, desc:"+5% devotion" },
+  { id:"candle",   name:"prayer candle",    icon:"🕯️", fx:{"job.acolyte":0.06},   desc:"acolytes +6%" },
+  { id:"zipties",  name:"zip ties",         icon:"🪢", fx:{"capMult.memes":0.1},  desc:"+10% room for memes" },
+  { id:"usb",      name:"flash drive",      icon:"💾", fx:{"capMult.lore":0.1},   desc:"+10% room for lore" },
+  { id:"tama",     name:"tamagotchi",       icon:"🥚", fx:{autoclick:1},          desc:"posts for you once a second" },
+  { id:"cat",      name:"lucky cat",        icon:"🐱", fx:{sparkle:0.15},         desc:"sparkles +15% more often" },
+  { id:"keys",     name:"house keys",       icon:"🔑", fx:{housing:2},            desc:"room for 2 more miladys" },
+  { id:"teddy",    name:"teddy bear",       icon:"🧸", fx:{happy:0.03},           desc:"+3% happiness" },
+  { id:"glitter",  name:"glitter",          icon:"✨", fx:{"mult.drip":0.05},     desc:"+5% drip" },
+  { id:"mega",     name:"megaphone",        icon:"📢", fx:{"mult.clout":0.05},    desc:"+5% clout" },
+  { id:"clippings",name:"grass clippings",  icon:"🌿", fx:{grass:0.03},           desc:"+3% grass when you touch it" },
+];
+
+/* the cathedral: built a stage at a time, in order. Every stage is +10% everything; some do more. */
+const WONDER = [
+  { name:"the foundation",   cost:{memes:3000,  cult:2000,  ether:10},               fx:{all:0.1} },
+  { name:"the nave",         cost:{memes:5000,  cult:4000,  ether:20},               fx:{all:0.1, housing:10, capAll:0.2} },
+  { name:"the pews",         cost:{memes:7000,  drip:1200,  ether:30},               fx:{all:0.1, happy:0.1} },
+  { name:"the choir",        cost:{cult:7000,   clout:2000, ether:40},               fx:{all:0.1, "mult.devotion":0.5} },
+  { name:"the windows",      cost:{drip:1800,   clout:3000, ether:55},               fx:{all:0.1, sparkle:0.5, capAll:0.2} },
+  { name:"the altar",        cost:{cult:10000,  devotion:600, ether:70},             fx:{all:0.1, ritualCd:-0.25} },
+  { name:"the bells",        cost:{memes:10000, clout:4000, ether:90},               fx:{all:0.1, autoclick:20} },
+  { name:"the spire",        cost:{cult:14000,  compute:3000, ether:110},            fx:{all:0.1, housingMult:0.25} },
+  { name:"the icon",         cost:{drip:2500,   devotion:1200, ether:140},           fx:{all:0.1, grass:0.5} },
+  { name:"the infinite",     cost:{cult:18000,  memes:14000, clout:5000, ether:180}, fx:{all:0.5, grass:1} },
+];
+
+/* challenges: touch grass into a run with a rule bent. Get to the infinite garden under it and the reward is yours for good. */
+const CHALLENGES = [
+  { id:"logoff",  name:"logged off",   rule:"you can't post. the network has to do it.",            reward:{autoclick:5},        rdesc:"you post 5 more times a second, forever" },
+  { id:"bear",    name:"bear season",  rule:"the market is a bear market, the whole run.",          reward:{"mult.lore":0.25, all:0.05}, rdesc:"+25% lore and +5% everything, forever" },
+  { id:"small",   name:"small world",  rule:"room for 25 miladys, no more, however much you build.", reward:{"job.poster":0.25, "job.memer":0.25, "job.trader":0.25}, rdesc:"posters, memers and traders +25%, forever" },
+  { id:"frugal",  name:"no frills",    rule:"no upgrades.",                                          reward:{"costMult.tech":-0.15, happy:0.05}, rdesc:"research 15% cheaper and +5% happiness, forever" },
+  { id:"speed",   name:"speedrun",     rule:"reach the infinite garden inside 90 minutes of play.",  reward:{grass:0.5},          rdesc:"+50% grass every time you touch it, forever" },
+];
+
 const PHASE_SECS = 120;
 const PHASES = [
   { id:"accum", name:"accumulation", icon:"🌱", color:"#50fa7b", mod:{lore:0.2},             desc:"+20% lore" },
@@ -156,22 +355,43 @@ const ACHIEVEMENTS = [
   { id:"ten",      name:"group chat",          desc:"10 miladys.",                        test:s=>s.miladys.length>=10 },
   { id:"fifty",    name:"discourse",           desc:"50 miladys.",                        test:s=>s.miladys.length>=50 },
   { id:"hundred",  name:"a scene",             desc:"100 miladys.",                       test:s=>s.miladys.length>=100 },
+  { id:"twofifty", name:"a movement",          desc:"250 miladys.",                       test:s=>s.miladys.length>=250 },
   { id:"rich",     name:"bag",                 desc:"hold 1,000 $CULT.",                  test:s=>s.res.cult>=1000 },
+  { id:"whale",    name:"whale",               desc:"hold 50,000 $CULT.",                 test:s=>s.res.cult>=50000 },
   { id:"scholar",  name:"well read",           desc:"research 8 things.",                 test:s=>Object.keys(s.tech).length>=8 },
-  { id:"allres",   name:"all of it",           desc:"research everything.",               test:s=>TECHS.every(t=>s.tech[t.id]) },
+  { id:"twenty",   name:"overeducated",        desc:"research 25 things in one run.",     test:s=>Object.keys(s.tech).length>=25 },
+  { id:"allres",   name:"all of it",           desc:"research everything there is.",      test:s=>TECHS.every(t=>s.tech[t.id]) },
   { id:"sparkle",  name:"shiny",               desc:"catch a sparkle.",                   test:s=>s.stats.sparkles>=1 },
   { id:"sparkle25",name:"magpie",              desc:"catch 25 sparkles.",                 test:s=>s.stats.sparkles>=25 },
   { id:"cycle",    name:"full cycle",          desc:"see the market go all the way round.", test:s=>s.cycle>=1 },
   { id:"happy",    name:"good vibes",          desc:"150% happiness.",                    test:(s,r)=>r && r.happy>=1.5 },
   { id:"grass",    name:"touched grass",       desc:"touch grass.",                       test:s=>s.stats.resets>=1 },
+  { id:"grass5",   name:"outside",             desc:"touch grass 5 times.",               test:s=>s.stats.resets>=5 },
   { id:"lawn",     name:"lawn",                desc:"hold 25 grass at once.",             test:s=>s.grass>=25 },
+  { id:"meadow",   name:"meadow",              desc:"hold 100 grass at once.",            test:s=>s.grass>=100 },
   { id:"garden",   name:"tend the garden",     desc:"build 5 gardens.",                   test:s=>(s.b.garden||0)>=5 },
+  { id:"singular", name:"singular",            desc:"research the singularity.",          test:s=>!!s.tech.singularity },
+  { id:"remilio",  name:"the boys",            desc:"a remilio joins.",                   test:s=>s.miladys.some(m=>m.kind==="remilio") },
+  { id:"ritual",   name:"devout",              desc:"hold a ritual.",                     test:s=>(s.stats.rituals||0)>=1 },
+  { id:"ritual50", name:"high priestess",      desc:"hold 50 rituals.",                   test:s=>(s.stats.rituals||0)>=50 },
+  { id:"raid",     name:"raid leader",         desc:"bring a raid home.",                 test:s=>(s.stats.raids||0)>=1 },
+  { id:"cancelled",name:"cancelled the cancel",desc:"bring a raid home from the cancel.", test:s=>(s.stats.cancels||0)>=1 },
+  { id:"relic",    name:"finders keepers",     desc:"find a relic.",                      test:s=>Object.keys(s.relics||{}).length>=1 },
+  { id:"relics",   name:"collector",           desc:"find 12 different relics.",          test:s=>Object.keys(s.relics||{}).length>=12 },
+  { id:"relicall", name:"museum",              desc:"find every relic.",                  test:s=>RELICS.every(r=>(s.relics||{})[r.id]) },
+  { id:"maxrelic", name:"polished",            desc:"take a relic to level 5.",           test:s=>Object.values(s.relics||{}).some(v=>v>=RELIC_MAX) },
+  { id:"foundation",name:"groundbreaking",     desc:"lay the cathedral's foundation.",    test:s=>(s.wonder||0)>=1 },
+  { id:"infinite", name:"the infinite",        desc:"finish the cathedral.",              test:s=>(s.wonder||0)>=WONDER.length },
+  { id:"challenge",name:"rules are rules",     desc:"finish a challenge.",                test:s=>Object.keys(s.chDone||{}).length>=1 },
+  { id:"challenges",name:"no rules",           desc:"finish every challenge.",            test:s=>CHALLENGES.every(c=>(s.chDone||{})[c.id]) },
 ];
 
 const NAMES = ["Miyu","Lain","Sakura","Remi","Yuki","Hana","Momo","Kiki","Nana","Rin","Aoi","Mika","Luna","Coco","Pika","Suki",
   "Emi","Noa","Rei","Yume","Kumi","Chi","Mei","Hoshi","Tama","Riri","Nao","Sora","Fumi","Ume","Kaya","Lulu","Mimi","Ruru",
   "Bambi","Cherry","Pixie","Dolly","Bunny","Peaches","Angel","Velvet","Sugar","Sailor","Kitty","Plum","Honey","Juno","Echo",
   "Nyx","Vesper","Wren","Ivy","Opal","Pearl","Ruby","Saffron","Tansy","Zuzu","Babydoll","Glitter","Neko","Usagi","Kuro","Shiro"];
+const REMILIO_NAMES = ["Remilio","Bo","Rocco","Jett","Dante","Milo","Ozzy","Kai","Rex","Taz","Ziggy","Bash","Gus","Lenny","Nico",
+  "Duke","Ace","Rudy","Moe","Sid","Fritz","Bruno","Vinnie","Hank","Skip","Chet","Biff","Rico","Spike","Dash"];
 
 /* what the timeline says while you're on it */
 const FEED = {

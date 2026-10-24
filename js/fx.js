@@ -10,7 +10,8 @@
 const FX = (()=>{
   const hex = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2), 16));
   const rgba = (c, a) => "rgba("+c.map(Math.round).join(",")+","+a.toFixed(3)+")";
-  const JOB_COL = { poster:"#ff79c6", memer:"#50fa7b", keeper:"#bd93f9", trader:"#f1fa8c", artist:"#8be9fd", streamer:"#ffb86c", mod:"#ffffff", idle:"#8a8f70" };
+  const JOB_COL = { poster:"#ff79c6", memer:"#50fa7b", keeper:"#bd93f9", trader:"#f1fa8c", artist:"#8be9fd", streamer:"#ffb86c", mod:"#ffffff",
+    dev:"#a6e3ff", acolyte:"#ffd27f", seer:"#c3a6ff", idle:"#8a8f70" };
   const TITLE = ["#ff79c6","#bd93f9","#50fa7b","#f1fa8c","#8be9fd"];
   /* vx/vy: which way the field drifts. energy: how fast, and how often signals run. */
   const MOOD = {
@@ -55,8 +56,8 @@ const FX = (()=>{
     for(const m of list){
       keep.add(m.id);
       let n = B.mine.get(m.id);
-      if(!n){ n = node(JOB_COL[m.job||"idle"], 0.8+Math.random()*0.2); n.mine = true; n.born = 1; B.mine.set(m.id, n); }
-      n.tint = hex(JOB_COL[m.job||"idle"]);
+      if(!n){ n = node(JOB_COL[m.job||"idle"] || JOB_COL.idle, 0.8+Math.random()*0.2); n.mine = true; n.born = 1; B.mine.set(m.id, n); }
+      n.tint = hex(JOB_COL[m.away ? "idle" : m.job||"idle"] || JOB_COL.idle);
     }
     for(const [id, n] of B.mine) if(!keep.has(id)){ B.mine.delete(id); B.rings.push({ x:n.x, y:n.y, r:4, a:0.5, c:n.tint, shrink:true }); }
   }
