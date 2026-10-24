@@ -47,7 +47,7 @@ Hover a resource (or tap it) to see where it comes from. Every price says how lo
 
 The clock in the top bar counts which market cycle this run is on and how long it's gone; click it for the stats tab, with every cycle you've played, time in all, a graph of any resource (or the network's size) across the run, and every past run in a table and a bar chart, with your fastest marked.
 
-Settings can name your network. Your Milady wears the relics you find, and her face reacts to what happens, from the Milady trait layers: she talks when you post, beams when you build, studies when you research, sparkles at a sparkle, tears up at drama, cries when someone logs off, goes hearts-in-her-eyes at an achievement, spirals in a frenzy, blinks, and dozes off if you leave her alone. That can be switched off in settings.
+Your Milady wears the relics you find, and her face reacts to what happens, from the Milady trait layers: she talks when you post, beams when you build, studies when you research, sparkles at a sparkle, tears up at drama, cries when someone logs off, goes hearts-in-her-eyes at an achievement, spirals in a frenzy, blinks, and dozes off if you leave her alone. That can be switched off in settings.
 
 ## Running it yourself
 

@@ -58,7 +58,7 @@ function fresh(keep){
     nn:{ i:0, got:{}, on:true, share:0.5 }, ended:0, endSeen:false,
     auto:{ build:true, tech:true, up:true, meme:true, keep:0.25, skip:{} },
     grass:0, perks:{}, ach:{}, relics:{}, chDone:{}, challenge:null,
-    cd:{}, raids:[], wonder:0, autoJob:"poster", seenNew:{}, netName:"", history:[], born:Date.now(),
+    cd:{}, raids:[], wonder:0, autoJob:"poster", seenNew:{}, history:[], born:Date.now(),
     stats:{ clicks:0, sparkles:0, resets:0, played:0, made:{}, rituals:0, raids:0, cancels:0, cycles:0 },
     you:null, settings:{ mute:false, bg:true, calm:!!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches),
       notifyOn:false, notify:{ raid:true, ritual:true, full:false, grass:true, nn:true } }, log:[], started:false,
@@ -84,6 +84,11 @@ function load(){
 }
 function migrate(s){ // fill in anything a newer version added
   const base = fresh();
+  if(s.netName){ // a name from when networks could have one: gone, and so is every feed line it was in
+    const was = esc(s.netName);
+    s.log = (s.log||[]).filter(l=>!String(l.html).includes(was));
+    delete s.netName;
+  }
   if(s.stats && s.stats.cycles==null) s.stats.cycles = Math.max(s.cycle||0, Math.floor((s.stats.played||0)/(PHASE_SECS*PHASES.length))); // older saves: a good guess from time played
   if(s.born==null && s.stats) s.born = Date.now() - (s.stats.played||0)*1000;
   for(const k in base) if(s[k]==null) s[k] = base[k];
@@ -93,7 +98,7 @@ function migrate(s){ // fill in anything a newer version added
   return s;
 }
 
-const netName = () => (S && S.netName) || "the network";
+const netName = () => "the network"; // networks used to take a name; not any more (anyone could put anything there)
 const esc = t => String(t).replace(/[&<>"]/g, c=>({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
 
 /* ---------- the rules ---------- */
@@ -566,7 +571,7 @@ function touchGrass(into){
     const history = (S.history||[]).concat({ n:resets(S)+1, t:S.runT, cycles:S.cycle, peak:S.run.peak||S.miladys.length, grass:g,
       challenge:S.challenge, beaten:!!met, end:Date.now() }).slice(-50);
     const keep = { grass:S.grass+g, perks:S.perks, ach:S.ach, you:S.you, settings:S.settings, started:true, relics:S.relics, chDone:done,
-      challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, netName:S.netName, history, born:S.born,
+      challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, history, born:S.born,
       nn:S.nn, auto:S.auto, ended:S.ended, endSeen:S.endSeen, stats:Object.assign(S.stats, { resets:S.stats.resets+1 }), log:[], nextId:S.nextId };
     S = fresh(keep);
     applyPerksAtStart(S);
@@ -1473,7 +1478,6 @@ function openSettings(){
     '<div class="set-row"><span>numbers</span><span class="seg">'+Object.keys(NOTATIONS).map(k=>'<button class="pick'+((S.settings.num||"short")===k ? " on" : "")+'" data-num="'+k+'">'+NOTATIONS[k]+'</button>').join("")+'</span></div>'+
     '<div class="set-row"><span>your milady</span><button class="btn small" id="set-reroll">reroll her</button></div>'+
     '<div class="set-row"><span>effects volume</span><input id="set-vol" type="range" min="0" max="100" value="'+(S.settings.vol!=null ? S.settings.vol : 70)+'"></div>'+
-    '<div class="set-row"><span>your network\'s name</span><span><input id="set-name" class="name-in" maxlength="24" placeholder="the network" value="'+esc(S.netName||"")+'"> <button class="btn small" id="set-name-ok">name it</button></span></div>'+
     '<div class="set-row"><span>her face reacts</span><button class="tog'+(S.settings.faces!==false ? " on" : "")+'" id="set-faces">'+(S.settings.faces!==false ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>wear your relics</span><button class="tog'+(S.settings.wear!==false ? " on" : "")+'" id="set-wear">'+(S.settings.wear!==false ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>notifications<br><span class="note">only while the game\'s in a background tab</span></span><button class="tog'+(S.settings.notifyOn ? " on" : "")+'" id="set-notify">'+(S.settings.notifyOn ? "on" : "off")+'</button></div>'+
@@ -1490,7 +1494,6 @@ function openSettings(){
   $("set-reroll").onclick = ()=>{ S.you = rollLook(); drawYou(); };
   $("set-vol").oninput = e=>{ S.settings.vol = +e.target.value; };
   $("set-vol").onchange = ()=>sfx.post();
-  $("set-name-ok").onclick = ()=>{ S.netName = $("set-name").value.trim().slice(0, 24); syncName(); toast(S.netName ? "🌸 "+esc(S.netName)+" is growing" : "it's the network again"); };
   $("set-wear").onclick = ()=>{ S.settings.wear = S.settings.wear===false; drawYou(); openSettings(); };
   $("set-faces").onclick = ()=>{ S.settings.faces = S.settings.faces===false; face = null; faceTick(); openSettings(); };
   $("set-notify").onclick = ()=>{ if(S.settings.notifyOn){ S.settings.notifyOn = false; openSettings(); } else askNotify(); };
@@ -1504,7 +1507,7 @@ function openSettings(){
   };
 }
 function syncName(){
-  document.querySelectorAll(".brand").forEach(b=>b.innerHTML = (S.netName ? esc(S.netName) : "the network")+" <b>"+(S.ended ? "is online" : "is growing")+"</b>");
+  document.querySelectorAll(".brand").forEach(b=>b.innerHTML = "the network <b>"+(S.ended ? "is online" : "is growing")+"</b>");
   setTitle();
 }
 function syncLook(){
