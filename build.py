@@ -45,6 +45,11 @@ stamped = re.sub(r'(href="css/style\.css|src="js/data\.js|src="js/fx\.js|src="js
 if stamped != page:
     (ROOT / "index.html").write_text(stamped, "utf8")
 (ROOT / "version.json").write_text(json.dumps({"v": stamp}) + "\n", "utf8")
+# the service worker keeps this version's code for offline play: a new stamp is a new worker, and the old one's cache goes
+sw = (ROOT / "sw.js").read_text("utf8")
+sw_stamped = re.sub(r'const V = "[0-9a-f]+";', 'const V = "%s";' % stamp, sw)
+if sw_stamped != sw:
+    (ROOT / "sw.js").write_text(sw_stamped, "utf8")
 
 html = re.sub(r'\?v=[0-9a-f]+"', '"', stamped)
 html = swap(html, '<link rel="stylesheet" href="css/style.css">',

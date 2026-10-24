@@ -27,7 +27,7 @@ const FX = (()=>{
 
   /* ---------- the backdrop ---------- */
   const B = { cv:null, cx:null, ambient:[], mine:new Map(), pulses:[], rings:[], bursts:[], w:0, h:0, d:1,
-    col:hex("#8be9fd"), vx:-7, vy:-3.5, energy:1, kick:0, nextPulse:0, nextBurst:0, frame:0, last:0 };
+    col:hex("#8be9fd"), vx:-7, vy:-3.5, energy:1, kick:0, nextPulse:0, nextBurst:0, frame:0, last:0, end:0, endOn:false };
   function size(){
     const d = Math.min(1.5, window.devicePixelRatio||1), ow = B.w, oh = B.h;
     B.w = innerWidth; B.h = innerHeight; B.d = d;
@@ -72,10 +72,13 @@ const FX = (()=>{
     cx.setTransform(B.d,0,0,B.d,0,0); cx.clearRect(0,0,W,H);
     if(!bgOn()) return;
     const m = mood(), k = Math.min(1, dt*0.8);
-    for(let i=0;i<3;i++) B.col[i] += (m.c[i]-B.col[i])*k; // the weather eases in, it doesn't cut
+    B.end += ((B.endOn ? 1 : 0) - B.end)*Math.min(1, dt*0.5);
+    // the ending: the colors go round all of them
+    const mc = B.end > 0.01 ? (c1 => c1.map((v,i)=>v + (hex(TITLE[(Math.floor(t/2.5)+1) % TITLE.length])[i]-v)*((t/2.5)%1)))(hex(TITLE[Math.floor(t/2.5) % TITLE.length])) : m.c;
+    for(let i=0;i<3;i++) B.col[i] += (mc[i]-B.col[i])*k; // the weather eases in, it doesn't cut
     B.vx += (m.vx-B.vx)*k; B.vy += (m.vy-B.vy)*k; B.energy += (m.energy-B.energy)*k;
     B.kick *= Math.pow(0.03, dt);
-    const sp = calm() ? 0.25 : 1, base = B.col, link = Math.min(170, Math.max(110, W/9));
+    const sp = calm() ? 0.25 : 1, base = B.col, link = Math.min(170, Math.max(110, W/9)) * (1 + B.end*0.6);
     // two soft clouds of the phase's color, wandering
     for(let i=0;i<2;i++){
       const gx = W*(0.5+0.38*Math.sin(t*0.05+i*2.4)), gy = H*(0.5+0.36*Math.cos(t*0.04+i*1.7)), r = Math.max(W,H)*0.45;
@@ -92,6 +95,11 @@ const FX = (()=>{
       if(n.x<-20) n.x += W+40; else if(n.x>W+20) n.x -= W+40;
       if(n.y<-20) n.y += H+40; else if(n.y>H+20) n.y -= H+40;
       if(n.born > 0){ n.born -= dt*0.7; }
+      if(B.end > 0.01){ // everything gathers into one turning globe: nearer nodes on the outside
+        const a = n.ph + t*0.12*(n.mine ? 1 : -0.6), rad = Math.min(W,H)*(0.16 + n.z*0.3), cy = Math.cos(n.ph*3.1);
+        const tx = W/2 + Math.cos(a)*rad*Math.sqrt(1-cy*cy*0.6), ty = H/2 + Math.sin(a)*rad*0.9 + cy*rad*0.25;
+        n.x += (tx - n.x)*Math.min(1, dt*1.4)*B.end; n.y += (ty - n.y)*Math.min(1, dt*1.4)*B.end;
+      }
     }
     // each node's color, worked out once a frame rather than once per thread
     for(const n of all){ const c = tintOf(n); n.cs = Math.round(c[0])+","+Math.round(c[1])+","+Math.round(c[2]); }
@@ -123,7 +131,7 @@ const FX = (()=>{
     }
     // signals: more of them the bigger the network
     if(!calm() && t > B.nextPulse && all.length > 1){
-      B.nextPulse = t + (0.9+Math.random()*1.2) / (B.energy*(1+Math.min(3, mine.length/25)));
+      B.nextPulse = t + (0.9+Math.random()*1.2) / (B.energy*(1+Math.min(3, mine.length/25))*(1+B.end*6));
       pulse(mine.length && Math.random()<0.7 ? mine : all, link);
     }
     B.pulses = B.pulses.filter(pl=>{
@@ -135,8 +143,8 @@ const FX = (()=>{
       return true;
     });
     // mania: now and then something goes off
-    if(m===MOOD.mania && !calm() && t > B.nextBurst){
-      B.nextBurst = t + 1.2+Math.random()*2.5;
+    if((m===MOOD.mania || B.end > 0.5) && !calm() && t > B.nextBurst){
+      B.nextBurst = t + (B.end > 0.5 ? 0.5 : 1.2)+Math.random()*2.5;
       const bx = W*(0.1+Math.random()*0.8), by = H*(0.1+Math.random()*0.45), col = hex(TITLE[Math.floor(Math.random()*TITLE.length)]);
       for(let i=0;i<34;i++){ const a = i/34*6.28, v = 50+Math.random()*90; B.bursts.push({ x:bx, y:by, vx:Math.cos(a)*v, vy:Math.sin(a)*v, life:1, c:col }); }
     }
@@ -235,5 +243,6 @@ const FX = (()=>{
     research(){ flash(document.body, "scan"); },
     grass(){ flash(document.body, "grassing"); B.mine.clear(); },
     frenzy(on){ document.body.classList.toggle("frenzy", !!on); },
+    ending(on){ B.endOn = !!on; B.kick = 1; document.body.classList.toggle("the-end", !!on); },
   };
 })();

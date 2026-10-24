@@ -53,12 +53,15 @@ function fresh(keep){
     v:1, last:Date.now(), t:0, runT:0,
     res:{}, seen:{}, b:{}, tech:{}, up:{}, miladys:[], nextId:1,
     cycle:0, phaseT:0, buffs:[],
-    timers:{ arrive:0, leave:0, sparkle:60, drama:180, auto:0, feed:40 },
-    run:{ cult:0, start:Date.now() },
+    timers:{ arrive:0, leave:0, sparkle:60, drama:180, auto:0, feed:40, bot:0 },
+    run:{ cult:0, start:Date.now(), auto:{ b:0, t:0, u:0, m:0 } },
+    nn:{ i:0, got:{}, on:true, share:0.5 }, ended:0, endSeen:false,
+    auto:{ build:true, tech:true, up:true, meme:true, keep:0.25, skip:{} },
     grass:0, perks:{}, ach:{}, relics:{}, chDone:{}, challenge:null,
     cd:{}, raids:[], wonder:0, autoJob:"poster", seenNew:{}, netName:"", history:[], born:Date.now(),
     stats:{ clicks:0, sparkles:0, resets:0, played:0, made:{}, rituals:0, raids:0, cancels:0, cycles:0 },
-    you:null, settings:{ mute:false, bg:true, calm:!!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) }, log:[], started:false,
+    you:null, settings:{ mute:false, bg:true, calm:!!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches),
+      notifyOn:false, notify:{ raid:true, ritual:true, full:false, grass:true, nn:true } }, log:[], started:false,
   };
   for(const r of RES){ s.res[r.id] = 0; s.seen[r.id] = 0; }
   for(const b of BUILDINGS) s.b[b.id] = 0;
@@ -81,7 +84,9 @@ function migrate(s){ // fill in anything a newer version added
   if(s.stats && s.stats.cycles==null) s.stats.cycles = Math.max(s.cycle||0, Math.floor((s.stats.played||0)/(PHASE_SECS*PHASES.length))); // older saves: a good guess from time played
   if(s.born==null && s.stats) s.born = Date.now() - (s.stats.played||0)*1000;
   for(const k in base) if(s[k]==null) s[k] = base[k];
-  for(const k of ["res","seen","b","timers","stats","settings","run"]) s[k] = Object.assign({}, base[k], s[k]);
+  for(const k of ["res","seen","b","timers","stats","settings","run","nn","auto"]) s[k] = Object.assign({}, base[k], s[k]);
+  s.settings.notify = Object.assign({}, base.settings.notify, s.settings.notify);
+  s.run.auto = Object.assign({}, base.run.auto, s.run.auto);
   return s;
 }
 
@@ -115,6 +120,7 @@ function sumFx(s){
   for(const r of RELICS) if(s.relics[r.id]) add(r.fx, s.relics[r.id]);
   for(let i=0; i<(s.wonder||0); i++) add(WONDER[i].fx, 1);
   for(const c of CHALLENGES) if(s.chDone[c.id]) add(c.reward, 1);
+  for(let i=0; i<((s.nn && s.nn.i)||0); i++) add(NEWNET[i].fx, 1);
   f.all = (f.all||0) + Object.keys(s.ach).length * ACH_EACH; // every achievement is worth a little
   return f;
 }
@@ -199,7 +205,97 @@ function tick(s, dt, live){
 
   for(let i=s.raids.length-1; i>=0; i--) if(s.raids[i].until <= s.t) raidHome(s, i, live);
   s.buffs = s.buffs.filter(b=>b.until > s.t);
+  pour(s, R, dt, live);
+  automate(s, R, dt, live);
+  sample(s);
   if(live) liveEvents(s, dt, R);
+}
+
+/* ---------- the new internet: poured into, a stage at a time ---------- */
+const nnOpen = s => resets(s) >= NEWNET_NG;
+function nnReqMet(s, st){
+  const q = st.req || {};
+  return (!q.miladys || s.miladys.length >= q.miladys) && (!q.cathedral || (s.wonder||0) >= WONDER.length);
+}
+/* how fast a resource is going in: a share of what you make, and all of it while storage is full (it'd be lost) */
+function pourRate(s, R, k){
+  const full = s.res[k] >= R.cap[k] - 1e-6;
+  return Math.max(0, R.net[k] + (k==="vibes" ? R.click*R.autoclick : 0)) * (full ? 1 : s.nn.share);
+}
+function pour(s, R, dt, live){
+  if(!nnOpen(s) || s.ended) return;
+  const st = NEWNET[s.nn.i]; if(!st) return;
+  if(s.nn.on) for(const k in st.need){
+    const left = st.need[k] - (s.nn.got[k]||0); if(left <= 0) continue;
+    const take = Math.min(left, s.res[k], pourRate(s, R, k)*dt);
+    if(take > 0){ s.res[k] -= take; s.nn.got[k] = (s.nn.got[k]||0) + take; }
+  }
+  if(Object.keys(st.need).every(k=>(s.nn.got[k]||0) >= st.need[k]-1e-6) && nnReqMet(s, st)) finishStage(s, live);
+}
+function pourStored(){ // everything you're holding that the stage still needs, in one go
+  const st = NEWNET[S.nn.i]; if(!st) return;
+  let any = 0;
+  for(const k in st.need){ const take = Math.min(st.need[k] - (S.nn.got[k]||0), S.res[k]); if(take > 0){ S.res[k] -= take; S.nn.got[k] = (S.nn.got[k]||0) + take; any++; } }
+  if(!any) return sfx.no();
+  sfx.buy(); FX.buy($("nn-pour-now"));
+  pour(S, R, 0, true); refresh();
+}
+function finishStage(s, live){
+  const st = NEWNET[s.nn.i];
+  s.nn.i++; s.nn.got = {};
+  if(s.nn.i >= NEWNET.length){ s.ended = Date.now(); s.endSeen = false; }
+  if(!live) return;
+  sfx.shiny(); FX.research();
+  log(st.icon+" the new internet: <b>"+st.name+"</b> is done. "+fxDesc(st.fx)+", for good.");
+  if(s.ended) showEnding();
+}
+
+/* ---------- automation: the robots the late runs buy ---------- */
+function automate(s, R, dt, live){
+  const p = s.perks, a = s.auto;
+  if(!p.automeme && !p.autotech && !p.autobuild && !p.autoup) return;
+  s.timers.bot = (s.timers.bot||0) + dt;
+  if(s.timers.bot < 1) return;
+  const n = Math.min(20, Math.floor(s.timers.bot)); s.timers.bot -= n; // one go a second (a long step offline gets a few)
+  const spare = c => Object.keys(c).every(k=>s.res[k] - c[k] >= a.keep*R.cap[k] - 1e-9); // leaves the reserve alone
+  const room = c => Math.max(...Object.keys(c).map(k=>c[k]/R.cap[k])); // how much of your storage it takes
+  const cheapest = list => list.sort((x, y)=>room(x.c) - room(y.c))[0];
+  const ct = s.run.auto;
+  for(let i=0; i<n; i++){
+    if(p.automeme && a.meme && s.res.vibes >= R.cap.vibes*0.9){
+      const m = Math.min(Math.floor((s.res.vibes - R.cap.vibes*0.6)/MEME_COST), Math.floor(R.cap.memes - s.res.memes));
+      if(m > 0){ s.res.vibes -= m*MEME_COST; gain(s, "memes", m, R.cap.memes); ct.m += m; }
+    }
+    if(p.autotech && a.tech){
+      const t = cheapest(TECHS.filter(t=>!s.tech[t.id] && techShownIn(s, t)).map(t=>({ x:t, c:techPrice(t, s, R.f) })).filter(o=>canPay(s, o.c)));
+      if(t){ pay(s, t.c); s.tech[t.x.id] = true; ct.t++; if(live){ log("🤖 researched <b>"+t.x.name+"</b>. "+t.x.desc); FX.research(); } }
+    }
+    if(p.autoup && a.up && !rule(s, "frugal")){
+      const u = cheapest(UPGRADES.filter(u=>!s.up[u.id] && shownIn(s, u) && canPay(s, u.cost)).map(u=>({ x:u, c:u.cost })));
+      if(u){ pay(s, u.c); s.up[u.x.id] = true; ct.u++; if(live) log("🤖 bought <b>"+u.x.name+"</b>: "+u.x.desc); }
+    }
+    if(p.autobuild && a.build){
+      const b = cheapest(BUILDINGS.filter(b=>shownIn(s, b) && !a.skip[b.id]).map(b=>({ x:b, c:priceOf(b, s) })).filter(o=>canPay(s, o.c) && spare(o.c)));
+      if(b){ pay(s, b.c); s.b[b.x.id]++; ct.b++; if(live && s.b[b.x.id]===1) log("🤖 built your first <b>"+b.x.name+"</b>."); }
+    }
+  }
+}
+
+/* ---------- graphs: what you held, through the run ---------- */
+/* a point every 15s; when there are too many, every other one goes and the gap doubles, so a long run still fits */
+const GRAPH_MAX = 240;
+function sample(s){
+  const g = s.run.g || (s.run.g = { every:15, next:0, t:[], v:{} });
+  if(s.runT < g.next) return;
+  g.next = s.runT + g.every;
+  g.t.push(Math.round(s.runT));
+  for(const r of RES) (g.v[r.id] || (g.v[r.id] = [])).push(+s.res[r.id].toPrecision(3));
+  (g.v.miladys || (g.v.miladys = [])).push(s.miladys.length);
+  if(g.t.length > GRAPH_MAX){
+    const half = arr => arr.filter((_, i)=>i%2===0);
+    g.t = half(g.t); for(const k in g.v) g.v[k] = half(g.v[k]);
+    g.every *= 2; g.next = g.t[g.t.length-1] + g.every;
+  }
 }
 
 /* sparkles, drama and chatter only happen while you're watching */
@@ -459,7 +555,8 @@ function touchGrass(into){
     const history = (S.history||[]).concat({ n:resets(S)+1, t:S.runT, cycles:S.cycle, peak:S.run.peak||S.miladys.length, grass:g,
       challenge:S.challenge, beaten:!!met, end:Date.now() }).slice(-50);
     const keep = { grass:S.grass+g, perks:S.perks, ach:S.ach, you:S.you, settings:S.settings, started:true, relics:S.relics, chDone:done,
-      challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, netName:S.netName, history, born:S.born, stats:Object.assign(S.stats, { resets:S.stats.resets+1 }), log:[], nextId:S.nextId };
+      challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, netName:S.netName, history, born:S.born,
+      nn:S.nn, auto:S.auto, ended:S.ended, endSeen:S.endSeen, stats:Object.assign(S.stats, { resets:S.stats.resets+1 }), log:[], nextId:S.nextId };
     S = fresh(keep);
     applyPerksAtStart(S);
     closeModal(); sfx.shiny(); FX.grass(); galleryKnown = null;
@@ -607,7 +704,8 @@ function isVisible(id){
   if(id==="vibes" || S.seen[id] > 0) return true;
   return opened(S, r) && (r.tech ? !!S.tech[r.tech] : r.show ? r.show(S) : false);
 }
-const techShown = t => opened(S, t) && (S.b.archive>0 || S.seen.lore>0) && (t.req||[]).every(r=>S.tech[r]);
+const techShownIn = (s, t) => opened(s, t) && (s.b.archive>0 || s.seen.lore>0) && (t.req||[]).every(r=>s.tech[r]);
+const techShown = t => techShownIn(S, t);
 function tabs(){
   const t = [{ id:"network", name:"network" }];
   if(R.housing>0 || S.miladys.length) t.push({ id:"miladys", name:"miladys" });
@@ -616,6 +714,7 @@ function tabs(){
   if(S.tech.iconography) t.push({ id:"rituals", name:"rituals" });
   if(S.tech.raiding) t.push({ id:"raids", name:"raids" });
   if(S.tech.geometry) t.push({ id:"cathedral", name:"cathedral" });
+  if(nnOpen(S)) t.push({ id:"newnet", name:"internet" });
   if(S.tech.garden || S.grass>0 || resets(S)>0) t.push({ id:"grass", name:"grass" });
   t.push({ id:"stats", name:"stats" });
   return t;
@@ -688,7 +787,7 @@ function build(){
   }
   if(S.challenge){ const c = byId(CHALLENGES, S.challenge); body.appendChild(el("div", "challenge-bar", "⚖️ challenge: <b>"+c.name+"</b>. "+c.rule+(c.id==="speed" ? ' <span id="speed-left"></span>' : ""))); }
   ({ network:buildNetwork, miladys:buildMiladys, lore:buildLore, upgrades:buildUpgrades, rituals:buildRituals,
-     raids:buildRaids, cathedral:buildCathedral, grass:buildGrass }[tab] || buildStats)(body);
+     raids:buildRaids, cathedral:buildCathedral, newnet:buildNewnet, grass:buildGrass }[tab] || buildStats)(body);
   tagNew(body);
 }
 /* "new!": anything you haven't seen before wears a tag until you've been to its tab and left again (or bought it).
@@ -723,6 +822,7 @@ function buildNetwork(body){
   bar.innerHTML = '<span>buy</span><span class="seg">'+["1","10","max"].map(m=>'<button class="pick'+(buyMode()===m ? " on" : "")+'" data-buy="'+m+'">'+(m==="max" ? "max" : "×"+m)+'</button>').join("")+'</span><span class="note">shift-click buys ten</span>';
   bar.querySelectorAll("[data-buy]").forEach(x=>x.onclick = ()=>{ S.settings.buyN = x.dataset.buy; refresh(true); });
   body.appendChild(bar);
+  if(PERKS.some(p=>p.auto && S.perks[p.id])) body.appendChild(autoBox());
   const grid = el("div", "grid");
   for(const b of BUILDINGS){
     if(!shown(b) && !S.b[b.id]) continue;
@@ -732,6 +832,30 @@ function buildNetwork(body){
   }
   body.appendChild(grid);
   if(!grid.children.length) body.appendChild(el("p", "note", "post a little. things show up once you can almost afford them."));
+}
+/* the robots you've bought, each with an off switch, and how much they've done this run */
+const AUTO_WHAT = { meme:["automeme","🐸 memes"], tech:["autotech","📜 research"], up:["autoup","✨ upgrades"], build:["autobuild","🏗️ buildings"] };
+function autoBox(){
+  const a = S.auto, box = el("div", "auto-box");
+  box.innerHTML = '<span class="auto-h">🤖 automation</span>'+
+    Object.keys(AUTO_WHAT).filter(k=>S.perks[AUTO_WHAT[k][0]]).map(k=>'<button class="tog'+(a[k] ? " on" : "")+'" data-auto="'+k+'">'+AUTO_WHAT[k][1]+'</button>').join("")+
+    (S.perks.autobuild ? '<span class="seg" title="what buildings never dip into">keep '+[0, 0.25, 0.5].map(v=>'<button class="pick'+(a.keep===v ? " on" : "")+'" data-keep="'+v+'">'+pct(v)+'</button>').join("")+'</span>'+
+      '<button class="btn small" id="auto-skip">'+(Object.values(a.skip).some(Boolean) ? "skipping "+Object.values(a.skip).filter(Boolean).length : "skip some")+'</button>' : "")+
+    '<span class="auto-ct" id="auto-ct"></span>';
+  box.querySelectorAll("[data-auto]").forEach(b=>b.onclick = ()=>{ a[b.dataset.auto] = !a[b.dataset.auto]; refresh(true); });
+  box.querySelectorAll("[data-keep]").forEach(b=>b.onclick = ()=>{ a.keep = +b.dataset.keep; refresh(true); });
+  const skip = box.querySelector("#auto-skip"); if(skip) skip.onclick = openSkip;
+  return box;
+}
+function openSkip(){
+  const list = BUILDINGS.filter(b=>shown(b) || S.b[b.id]);
+  openModal('<h2>🤖 what the scripts build</h2><p class="note">switch a building off and the scripts leave it to you.</p><div class="skip-list">'+
+    list.map(b=>'<button class="tog'+(S.auto.skip[b.id] ? "" : " on")+'" data-skip="'+b.id+'">'+b.name+'</button>').join("")+
+    '</div><div class="row"><button class="btn small" data-close>done</button></div>');
+  document.querySelectorAll("#modal [data-skip]").forEach(x=>x.onclick = ()=>{
+    const id = x.dataset.skip; S.auto.skip[id] = !S.auto.skip[id];
+    x.classList.toggle("on", !S.auto.skip[id]); sig = "";
+  });
 }
 function buildMiladys(body){
   const head = el("div", "pop-head");
@@ -878,6 +1002,40 @@ function buildCathedral(body){
     body.appendChild(c);
   } else body.appendChild(el("p", "big-note", "⛪ the cathedral of the network is finished."));
 }
+/* the new internet: seven stages in a ring that closes as they're finished */
+function nnRing(done){
+  const n = NEWNET.length, R0 = 70, c = 90, pt = i => { const a = -Math.PI/2 + i/n*Math.PI*2; return [c + R0*Math.cos(a), c + R0*Math.sin(a)]; };
+  let s = '<svg class="nn-ring" viewBox="0 0 180 180" aria-hidden="true">';
+  for(let i=0; i<n; i++) for(let j=i+1; j<n; j++){ // every finished node threads to every other finished one: a mesh
+    if(i < done && j < done){ const [x1,y1] = pt(i), [x2,y2] = pt(j); s += '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" class="on"/>'; }
+  }
+  for(let i=0; i<n; i++){ const [x,y] = pt(i), [x2,y2] = pt((i+1)%n); s += '<line x1="'+x+'" y1="'+y+'" x2="'+x2+'" y2="'+y2+'" class="'+(i < done && (i+1)%n < done ? "on" : "")+'"/>'; }
+  NEWNET.forEach((st, i)=>{ const [x,y] = pt(i); s += '<g class="'+(i < done ? "on" : i===done ? "next" : "")+'"><circle cx="'+x+'" cy="'+y+'" r="13"/><text x="'+x+'" y="'+(y+5)+'">'+st.icon+'</text></g>'; });
+  return s + '<text class="mid" x="90" y="96">'+(done >= n ? "online" : done+" / "+n)+'</text></svg>';
+}
+function buildNewnet(body){
+  const i = S.nn.i, st = NEWNET[i];
+  const wrap = el("div", "cathedral nn");
+  wrap.innerHTML = nnRing(i)+'<div class="stages">'+NEWNET.map((w,k)=>'<div class="stage'+(k<i ? " done" : k===i ? " next" : "")+'"><b>'+(k<i ? "✅ " : w.icon+" ")+w.name+'</b><span>'+(k<=i ? w.desc+" " : "")+fxDesc(w.fx)+'</span></div>').join("")+'</div>';
+  body.appendChild(wrap);
+  if(S.ended){
+    body.appendChild(el("p", "big-note", "🌐 the new internet is online, since "+new Date(S.ended).toLocaleDateString()+". it doesn't need you to keep it going. it'd like you to stay anyway."));
+    const b = el("button", "btn small", "watch the ending again"); b.onclick = ()=>showEnding(); body.appendChild(b);
+    return;
+  }
+  const box = el("div", "nn-box");
+  box.innerHTML = '<div class="nn-h"><b>'+st.icon+" "+st.name+'</b><span>stage '+(i+1)+" of "+NEWNET.length+" · "+st.desc+'</span></div>'+
+    Object.keys(st.need).map(k=>'<div class="nn-row" data-nn="'+k+'"><span>'+resIcon(k)+" "+RES_BY[k].name+'</span><i class="pbar"><u></u></i><b></b><em></em></div>').join("")+
+    (st.req ? '<div class="nn-req" id="nn-req"></div>' : "")+
+    '<div class="nn-ctl"><button class="tog'+(S.nn.on ? " on" : "")+'" id="nn-on">'+(S.nn.on ? "pouring" : "paused")+'</button>'+
+    '<span class="seg" title="how much of what you make goes in">'+[0.25, 0.5, 1].map(v=>'<button class="pick'+(S.nn.share===v ? " on" : "")+'" data-share="'+v+'">'+pct(v)+'</button>').join("")+'</span>'+
+    '<button class="btn small" id="nn-pour-now">pour in what you\'re holding</button></div>'+
+    '<p class="note">while it\'s pouring, that share of everything the stage needs goes in as you make it, and all of it once storage is full. what goes in stays when you touch grass.</p>';
+  body.appendChild(box);
+  $("nn-on").onclick = ()=>{ S.nn.on = !S.nn.on; refresh(true); };
+  box.querySelectorAll("[data-share]").forEach(b=>b.onclick = ()=>{ S.nn.share = +b.dataset.share; refresh(true); });
+  $("nn-pour-now").onclick = pourStored;
+}
 function buildGrass(body){
   const top = el("div", "grass-top");
   top.innerHTML = '<div class="big-num">🌿 <b id="grass-have">0</b> grass</div>'+
@@ -943,7 +1101,11 @@ function buildStats(body){
     '<span>market cycles done in all</span><b id="st-cyc-all">'+fmt(S.stats.cycles)+'</b>'+
     '<span>played in all</span><b id="st-played">'+fmtTime(S.stats.played)+'</b>'+
     '<span>first logged on</span><b>'+new Date(S.born).toLocaleDateString()+'</b>'+
-    '</div>'+runHistory()+
+    '</div>'+
+    '<div class="box-h">this run, over time <span id="chart-pick">'+chartSeries().map(k=>'<button class="pick'+(k===chartKey ? " on" : "")+'" data-chart="'+k+'">'+(k==="miladys" ? "🌸 miladys" : resIcon(k))+'</button>').join("")+'</span></div>'+
+    '<div class="chart" id="chart-run"></div>'+
+    runHistory()+
+    ((S.history||[]).length >= 2 ? '<div class="box-h">how long each run took <span>⚡ your fastest</span></div><div class="chart" id="chart-runs"></div>' : "")+
     '<div class="box-h">the network</div><div class="stat-grid">'+
     '<span>posts</span><b>'+fmt(S.stats.clicks)+'</b>'+
     '<span>sparkles caught</span><b>'+fmt(S.stats.sparkles)+'</b>'+
@@ -954,6 +1116,72 @@ function buildStats(body){
     '<div class="box-h">achievements <span>'+Object.keys(S.ach).length+" / "+ACHIEVEMENTS.length+' · each one +'+pct(ACH_EACH)+' everything · now +'+pct(Object.keys(S.ach).length*ACH_EACH)+'</span></div>'+
     '<div class="achs">'+ACHIEVEMENTS.map(a=>'<div class="ach'+(S.ach[a.id] ? " got" : "")+'"><b>'+(S.ach[a.id] ? "🏆 " : "🔒 ")+a.name+'</b><span>'+a.desc+'</span></div>').join("")+'</div>';
   if(resets(S) >= 3 || Object.keys(S.relics).length) body.appendChild(relicShelf());
+  if(S.ended){ const b = el("button", "btn small", "🌐 watch the ending again"); b.onclick = ()=>showEnding(); body.appendChild(b); }
+  body.querySelectorAll("[data-chart]").forEach(b=>b.onclick = ()=>{ chartKey = b.dataset.chart; refresh(true); });
+  chartDrawn = ""; drawRunChart(); drawRunsChart();
+}
+
+/* ---------- charts: plain svg, one series at a time, with a crosshair ---------- */
+let chartKey = "vibes", chartDrawn = "";
+const chartSeries = () => RES.filter(r=>isVisible(r.id)).map(r=>r.id).concat("miladys");
+const svgEl = (tag, attrs) => '<'+tag+' '+Object.keys(attrs).map(k=>k+'="'+attrs[k]+'"').join(" ")+'/>';
+function niceMax(v){ if(v <= 0) return 1; const e = Math.pow(10, Math.floor(Math.log10(v))), m = v/e; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10)*e; }
+/* one line: what you held of something, from the start of the run to now */
+function drawRunChart(){
+  const box = $("chart-run"), g = S.run.g; if(!box) return;
+  if(!chartSeries().includes(chartKey)) chartKey = "vibes";
+  const key = chartKey+"|"+(g ? g.t.length : 0)+"|"+box.clientWidth;
+  if(key===chartDrawn) return; chartDrawn = key;
+  if(!g || g.t.length < 2){ box.innerHTML = '<p class="note">a point every 15 seconds. give it a minute.</p>'; return; }
+  const ts = g.t, vs = g.v[chartKey], W = Math.max(280, box.clientWidth), H = 170, L = 46, Rp = 10, T = 10, B = 22;
+  const top = niceMax(Math.max(...vs)), x = t => L + (t - ts[0])/Math.max(1, ts[ts.length-1] - ts[0])*(W-L-Rp), y = v => T + (1 - v/top)*(H-T-B);
+  const col = chartKey==="miladys" ? "#ff79c6" : RES_BY[chartKey].color;
+  let s = '<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="'+(chartKey==="miladys" ? "miladys" : RES_BY[chartKey].name)+' over this run">';
+  for(const f of [0, 0.5, 1]) s += svgEl("line", { x1:L, x2:W-Rp, y1:y(top*f), y2:y(top*f), class:"grid" }) + '<text class="ax" x="'+(L-6)+'" y="'+(y(top*f)+4)+'" text-anchor="end">'+fmt(top*f)+'</text>';
+  s += '<text class="ax" x="'+L+'" y="'+(H-6)+'">'+fmtTime(ts[0])+'</text><text class="ax" x="'+(W-Rp)+'" y="'+(H-6)+'" text-anchor="end">'+fmtTime(ts[ts.length-1])+'</text>';
+  const pts = ts.map((t,i)=>x(t).toFixed(1)+","+y(vs[i]).toFixed(1));
+  s += '<path d="M'+x(ts[0])+','+y(0)+' L'+pts.join(" L")+' L'+x(ts[ts.length-1])+','+y(0)+' Z" fill="'+col+'" opacity=".12"/>';
+  s += '<polyline points="'+pts.join(" ")+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linejoin="round"/>';
+  s += '<g class="xh hidden"><line y1="'+T+'" y2="'+(H-B)+'"/><circle r="4" fill="'+col+'"/></g><rect class="hit" x="'+L+'" y="0" width="'+(W-L-Rp)+'" height="'+H+'" fill="transparent"/></svg><div class="chart-tip hidden"></div>';
+  box.innerHTML = s;
+  const xh = box.querySelector(".xh"), tip = box.querySelector(".chart-tip");
+  const at = ev => {
+    const r = box.querySelector("svg").getBoundingClientRect(), px = (ev.clientX - r.left)*W/r.width;
+    let i = 0; for(let k=1; k<ts.length; k++) if(Math.abs(x(ts[k]) - px) < Math.abs(x(ts[i]) - px)) i = k;
+    xh.classList.remove("hidden"); tip.classList.remove("hidden");
+    xh.querySelector("line").setAttribute("x1", x(ts[i])); xh.querySelector("line").setAttribute("x2", x(ts[i]));
+    xh.querySelector("circle").setAttribute("cx", x(ts[i])); xh.querySelector("circle").setAttribute("cy", y(vs[i]));
+    tip.innerHTML = '<b>'+fmt(vs[i])+'</b> '+(chartKey==="miladys" ? "miladys" : RES_BY[chartKey].name)+' <span>at '+fmtTime(ts[i])+'</span>';
+    tip.style.left = Math.min(r.width-140, Math.max(0, x(ts[i])*r.width/W - 60))+"px";
+  };
+  const hit = box.querySelector(".hit");
+  hit.addEventListener("pointermove", at); hit.addEventListener("pointerdown", at);
+  hit.addEventListener("pointerleave", ()=>{ xh.classList.add("hidden"); tip.classList.add("hidden"); });
+}
+/* bars: every finished run's length, oldest on the left, so getting faster shows */
+function drawRunsChart(){
+  const box = $("chart-runs"); if(!box) return;
+  const h = (S.history||[]).slice(-30), W = Math.max(280, box.clientWidth), H = 140, L = 46, T = 14, B = 20, Rp = 10;
+  const most = Math.max(...h.map(r=>r.t)), top = most > 3600 ? Math.ceil(most/3600)*3600 : Math.ceil(most/600)*600; // whole hours, or ten minutes
+  const bw = Math.min(44, (W-L-Rp)/h.length), y = v => T + (1 - v/top)*(H-T-B);
+  const plain = h.filter(r=>!r.challenge), best = plain.length ? Math.min(...plain.map(r=>r.t)) : -1;
+  let s = '<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="how long each run took">';
+  for(const f of [0, 0.5, 1]) s += svgEl("line", { x1:L, x2:W-Rp, y1:y(top*f), y2:y(top*f), class:"grid" }) + '<text class="ax" x="'+(L-6)+'" y="'+(y(top*f)+4)+'" text-anchor="end">'+fmtTime(top*f).replace(/ 0[ms]$/, "")+'</text>';
+  h.forEach((r, i)=>{
+    const bx = L + i*bw + 1, w = Math.max(2, bw-2), by = y(r.t), bh = Math.max(1, y(0) - by), rr = Math.min(4, w/2, bh);
+    s += '<path class="bar'+(r.challenge ? " ch" : "")+'" data-i="'+i+'" d="M'+bx+','+y(0)+' V'+(by+rr)+' Q'+bx+','+by+' '+(bx+rr)+','+by+' H'+(bx+w-rr)+' Q'+(bx+w)+','+by+' '+(bx+w)+','+(by+rr)+' V'+y(0)+' Z"/>';
+    if(r.t===best && !r.challenge) s += '<text class="ax" x="'+(bx+w/2)+'" y="'+(by-3)+'" text-anchor="middle">⚡</text>';
+    if(h.length <= 15 || i%Math.ceil(h.length/15)===0) s += '<text class="ax" x="'+(bx+w/2)+'" y="'+(H-6)+'" text-anchor="middle">'+r.n+'</text>';
+  });
+  box.innerHTML = s + '</svg><div class="chart-tip hidden"></div>';
+  const tip = box.querySelector(".chart-tip");
+  box.querySelectorAll(".bar").forEach(b=>{
+    const show = ()=>{ const r = h[+b.dataset.i], br = b.getBoundingClientRect(), cr = box.getBoundingClientRect();
+      tip.innerHTML = '<b>run '+r.n+'</b> '+fmtTime(r.t)+' <span>· '+r.cycles+' cycles · peak '+fmt(r.peak)+' · +'+fmt(r.grass)+' 🌿'+(r.challenge ? " · ⚖️ "+byId(CHALLENGES, r.challenge).name : "")+'</span>';
+      tip.classList.remove("hidden"); tip.style.left = Math.min(cr.width-200, Math.max(0, br.left - cr.left - 60))+"px"; };
+    b.addEventListener("pointerenter", show); b.addEventListener("pointerdown", show);
+    b.addEventListener("pointerleave", ()=>tip.classList.add("hidden"));
+  });
 }
 
 /* fill in the numbers */
@@ -1092,6 +1320,23 @@ function update(){
     c.classList.toggle("cant", !canPay(S, p));
     c.classList.toggle("blocked", !fitsCap(p, R.cap));
   });
+  if($("auto-ct")){
+    const c = S.run.auto;
+    $("auto-ct").textContent = "this run: "+[c.b && fmt(c.b)+" built", c.t && c.t+" researched", c.u && c.u+" upgrades", c.m && fmt(c.m)+" memes"].filter(Boolean).join(" · ") || "this run: nothing yet";
+  }
+  const st = NEWNET[S.nn.i];
+  if(st && !S.ended) body.querySelectorAll("[data-nn]").forEach(row=>{
+    const k = row.dataset.nn, got = S.nn.got[k]||0, need = st.need[k], left = need - got, rate = S.nn.on ? pourRate(S, R, k) : 0;
+    row.querySelector("u").style.width = Math.min(100, got/need*100)+"%";
+    row.querySelector("b").textContent = fmt(got)+" / "+fmt(need);
+    row.querySelector("em").textContent = left <= 1e-6 ? "✅" : rate > 0 ? "⏳ "+(left/rate > 99*3600 ? "ages" : fmtTime(left/rate)) : S.nn.on ? "nothing coming in" : "paused";
+  });
+  if($("nn-req") && st){
+    const q = st.req;
+    $("nn-req").innerHTML = (q.miladys ? (S.miladys.length >= q.miladys ? "✅" : "⏳")+" needs "+q.miladys+" miladys in the network at once ("+S.miladys.length+" now). " : "")+
+      (q.cathedral ? ((S.wonder||0) >= WONDER.length ? "✅" : "⏳")+" needs the cathedral finished this run." : "");
+  }
+  if($("chart-run")) drawRunChart();
   if($("speed-left")) $("speed-left").textContent = S.runT <= 5400 ? fmtTime(5400 - S.runT)+" left." : "out of time.";
   if($("grass-have")){
     const g = grassGain(S, R.f);
@@ -1168,7 +1413,7 @@ function signature(){
     TECHS.filter(t=>techShown(t)||S.tech[t.id]).map(t=>t.id+(S.tech[t.id]?1:0)).join(),
     UPGRADES.filter(u=>shown(u)||S.up[u.id]).map(u=>u.id+(S.up[u.id]?1:0)).join(),
     JOBS.filter(shown).length, Object.keys(S.perks).length, RITUALS.filter(shown).length, S.raids.length, S.wonder, Object.keys(S.relics).length,
-    Object.values(S.relics).join(""), !!R.f.autoassign, tab==="miladys" ? S.miladys.map(m=>m.id+m.job+(m.away||"")).join() : ""].join("|");
+    Object.values(S.relics).join(""), !!R.f.autoassign, S.nn.i, S.ended, tab==="miladys" ? S.miladys.map(m=>m.id+m.job+(m.away||"")).join() : ""].join("|");
 }
 function refresh(force){
   R = rates(S);
@@ -1215,6 +1460,10 @@ function openSettings(){
     '<div class="set-row"><span>effects volume</span><input id="set-vol" type="range" min="0" max="100" value="'+(S.settings.vol!=null ? S.settings.vol : 70)+'"></div>'+
     '<div class="set-row"><span>your network\'s name</span><span><input id="set-name" class="name-in" maxlength="24" placeholder="the network" value="'+esc(S.netName||"")+'"> <button class="btn small" id="set-name-ok">name it</button></span></div>'+
     '<div class="set-row"><span>wear your relics</span><button class="tog'+(S.settings.wear!==false ? " on" : "")+'" id="set-wear">'+(S.settings.wear!==false ? "on" : "off")+'</button></div>'+
+    '<div class="set-row"><span>notifications<br><span class="note">only while the game\'s in a background tab</span></span><button class="tog'+(S.settings.notifyOn ? " on" : "")+'" id="set-notify">'+(S.settings.notifyOn ? "on" : "off")+'</button></div>'+
+    (S.settings.notifyOn ? '<div class="set-row notify-kinds">'+Object.keys(NOTIFY_WHAT).map(k=>'<button class="tog'+(S.settings.notify[k] ? " on" : "")+'" data-notify="'+k+'">'+NOTIFY_WHAT[k]+'</button>').join("")+'</div>' : "")+
+    (standalone() ? "" : '<div class="set-row"><span>install it as an app</span>'+(installPrompt ? '<button class="btn small" id="set-install">install</button>' : '<span class="note">'+(/iphone|ipad/i.test(navigator.userAgent) ? "in safari: share → add to home screen" : "use your browser's install button")+'</span>')+'</div>')+
+    (window.caches && !window.INLINE_FILES ? '<div class="set-row"><span>keep every picture, to play offline (about 11 MB)</span><button class="btn small" id="set-offline">'+(offlineState==="done" ? "kept ✓" : offlineState==="busy" ? "keeping…" : "keep them")+'</button></div>' : "")+
     '<div class="set-row"><span>save file</span><span><button class="btn small" id="set-download">download</button> <button class="btn small" id="set-upload">load a file</button></span></div>'+
     '<input id="save-file" type="file" accept=".json,application/json" class="hidden">'+
     '<div class="set-row"><span>save as text</span><span><button class="btn small" id="set-export">copy</button> <button class="btn small" id="set-import">paste</button></span></div>'+
@@ -1232,6 +1481,10 @@ function openSettings(){
   $("set-vol").onchange = ()=>sfx.post();
   $("set-name-ok").onclick = ()=>{ S.netName = $("set-name").value.trim().slice(0, 24); syncName(); toast(S.netName ? "🌸 "+esc(S.netName)+" is growing" : "it's the network again"); };
   $("set-wear").onclick = ()=>{ S.settings.wear = S.settings.wear===false; drawYou(); openSettings(); };
+  $("set-notify").onclick = ()=>{ if(S.settings.notifyOn){ S.settings.notifyOn = false; openSettings(); } else askNotify(); };
+  document.querySelectorAll("#modal [data-notify]").forEach(b=>b.onclick = ()=>{ const k = b.dataset.notify; S.settings.notify[k] = !S.settings.notify[k]; openSettings(); });
+  if($("set-install")) $("set-install").onclick = async ()=>{ installPrompt.prompt(); await installPrompt.userChoice.catch(()=>{}); installPrompt = null; openSettings(); };
+  if($("set-offline")) $("set-offline").onclick = ()=>keepOffline(false);
   $("set-download").onclick = ()=>{
     save();
     const a = document.createElement("a");
@@ -1273,7 +1526,7 @@ function loadSave(data){
 const BACKUP_KEY = "network-backup-v1";
 function backup(){ try{ return JSON.parse(localStorage.getItem(BACKUP_KEY)); }catch(e){ return null; } }
 function syncName(){
-  document.querySelectorAll(".brand").forEach(b=>b.innerHTML = (S.netName ? esc(S.netName) : "the network")+" <b>is growing</b>");
+  document.querySelectorAll(".brand").forEach(b=>b.innerHTML = (S.netName ? esc(S.netName) : "the network")+" <b>"+(S.ended ? "is online" : "is growing")+"</b>");
   setTitle();
 }
 function syncLook(){
@@ -1291,7 +1544,8 @@ function openHelp(){
     '<p>the <b>market</b> goes round: accumulation, mania, distribution, bear. each one is good for something.</p>'+
     '<p>catch the <b>💎 sparkles</b> when they show up.</p>'+
     '<p>much later you can <b>touch grass</b>: start over with grass 🌿 that makes everything faster, forever. every time you do, something new opens: compute and devs, then rituals and remilios, then raids and relics, then a cathedral, then challenges. the grass tab says what\'s next.</p>'+
-    '<p class="note">the game keeps going while you\'re away (up to 8 hours).</p>'+
+    '<p>after six times, the last thing opens: <b>the new internet</b>, seven stages you pour into across runs. late runs can buy <b>robots</b> (perks) that meme, research, upgrade and build for you.</p>'+
+    '<p class="note">the game keeps going while you\'re away (up to 8 hours). settings can let it ping you when a raid\'s home, and on most browsers it installs as an app that plays offline.</p>'+
     '<div class="keys"><b>keys</b><span>arrows move the highlight · enter presses it (shift+enter does 10) · space posts · m makes a meme · q / e or 1-9 change tabs · esc backs out</span>'+
     '<b>gamepad</b><span>d-pad or stick moves · Ⓐ press · Ⓑ back · Ⓧ post · Ⓨ meme it · LB / RB tabs · START settings</span></div>'+
     '<p>want something with more fight in it? <a href="https://cancel.tylerirl.com/">the cancel is coming</a> is this one\'s companion: a roguelite with the same miladys. your network keeps growing while you play it.</p>'+
@@ -1318,21 +1572,29 @@ async function drawYou(){
 }
 
 /* ---------- time away ---------- */
-function catchUp(){
+/* a background tab the browser only wakes once a minute is played quietly, and the welcome back covers all of it
+   once you're looking again */
+let awaySnap = null;
+function catchUp(quiet){
   const cap = (S.perks.sleep ? 24 : 8)*3600;
-  const away = Math.min(cap, (Date.now() - S.last)/1000);
+  const gone = Math.min(cap, (Date.now() - S.last)/1000);
   S.last = Date.now();
-  if(away <= 0) return;
-  const before = Object.assign({}, S.res), people = S.miladys.length, firstId = S.nextId, raids = S.stats.raids||0,
-    relics = Object.assign({}, S.relics), cycles = S.cycle;
-  const step = Math.max(1, away/20000);
-  for(let t=0; t<away; t+=step) tick(S, Math.min(step, away-t), false);
+  if(gone <= 0 && !awaySnap) return;
+  if(!awaySnap) awaySnap = { secs:0, res:Object.assign({}, S.res), people:S.miladys.length, firstId:S.nextId, raids:S.stats.raids||0,
+    relics:Object.assign({}, S.relics), cycles:S.cycle, nn:S.nn.i };
+  awaySnap.secs += Math.max(0, gone);
+  const step = Math.max(1, gone/20000);
+  for(let t=0; t<gone; t+=step) tick(S, Math.min(step, gone-t), false);
+  if(quiet) return;
+  const snap = awaySnap; awaySnap = null;
+  const away = snap.secs, before = snap.res, people = snap.people, firstId = snap.firstId, raids = snap.raids, relics = snap.relics, cycles = snap.cycles;
   const got = RES.filter(r=>isVisible(r.id) && Math.abs(S.res[r.id]-before[r.id]) >= 1)
     .map(r=>'<span class="chip">'+(S.res[r.id]>=before[r.id] ? "+" : "")+fmt(S.res[r.id]-before[r.id])+" "+resIcon(r.id)+"</span>").join(" ");
   const joined = S.nextId - firstId, left = joined - (S.miladys.length - people), back = (S.stats.raids||0) - raids;
   const found = RELICS.filter(r=>(S.relics[r.id]||0) > (relics[r.id]||0)).map(r=>r.icon+" "+r.name+(S.relics[r.id]>1 ? " (lv "+S.relics[r.id]+")" : ""));
   const lines = [joined && "🌸 "+joined+" miladys joined", left > 0 && "🥀 "+left+" logged off", back && "⚔️ "+back+" raid"+(back>1 ? "s" : "")+" came home",
-    found.length && "🗿 relics: "+found.join(", "), S.cycle > cycles && "📈 the market went round "+(S.cycle-cycles)+" time"+(S.cycle-cycles>1 ? "s" : "")].filter(Boolean);
+    found.length && "🗿 relics: "+found.join(", "), S.cycle > cycles && "📈 the market went round "+(S.cycle-cycles)+" time"+(S.cycle-cycles>1 ? "s" : ""),
+    S.nn.i > snap.nn && "🌐 finished "+NEWNET.slice(snap.nn, S.nn.i).map(s=>s.name).join(", ")].filter(Boolean);
   const msg = "while you were away ("+fmtTime(away)+"): "+(got || "nothing much.")+(lines.length ? " "+lines.join(" · ")+"." : "");
   if(away < 60) return; // a tab that was in the background a moment isn't worth a message
   log("🌙 "+msg);
@@ -1376,7 +1638,7 @@ async function checkVersion(){
 let navSel = null, navMemo = "";
 const NAV_KEYS = ["tab","b","t","u","p","rit","raid","ws","ch","m","num","job","d"];
 const modalOpen = () => !$("modal").classList.contains("hidden");
-function navScope(){ return modalOpen() ? $("modal-panel") : document.querySelector(".screen.active"); }
+function navScope(){ return $("ending") || (modalOpen() ? $("modal-panel") : document.querySelector(".screen.active")); }
 function navItems(scope){
   return scope ? [...scope.querySelectorAll("button, select, input, a[href]")].filter(el=>!el.disabled && el.offsetParent!==null) : [];
 }
@@ -1515,12 +1777,110 @@ function frame(){
   if(!S || !S.started) return;
   if((titleT += 1) % 7 === 0) setTitle(); // about once a second
   const now = Date.now(), dt = (now - S.last)/1000;
-  if(dt > 5){ catchUp(); refresh(true); }
+  if(dt > 5){ catchUp(document.hidden); if(!document.hidden) refresh(true); }
   else if(dt > 0){ tick(S, dt, true); S.last = now; }
   saveT += dt; achT += dt;
-  if(achT > 1){ achT = 0; checkAch(); }
+  if(achT > 1){ achT = 0; checkAch(); watch(); }
   if(saveT > 5){ saveT = 0; save(); }
+  if(S.ended && !S.endSeen && !document.hidden && !$("ending")) showEnding();
   refresh();
+}
+
+/* ---------- notifications: only if you ask, only while the tab's in the background ---------- */
+const NOTIFY_WHAT = { raid:"a raid comes home", ritual:"a ritual is ready", full:"storage fills up", grass:"you can touch grass", nn:"a stage of the new internet is done" };
+let watchPrev = null, SWREG = null;
+function watchState(){
+  return { raids:S.stats.raids||0, rit:S.tech.iconography ? readyCounts().rituals : 0, nn:S.nn.i,
+    full:RES.filter(r=>isVisible(r.id) && S.res[r.id] >= R.cap[r.id]-1e-6).map(r=>r.id), grass:!!S.tech.garden && grassGain(S, R.f) >= 1 };
+}
+function watch(){
+  const now = watchState(), p = watchPrev; watchPrev = now;
+  if(!p || !document.hidden || !S.settings.notifyOn) return;
+  if(now.raids > p.raids) notify("raid", "⚔️ "+(now.raids-p.raids > 1 ? (now.raids-p.raids)+" raids came home" : "a raid came home"), "the loot's in. send them out again?");
+  if(now.rit > 0 && p.rit===0) notify("ritual", "🕯️ a ritual is ready", "there's devotion to spend.");
+  const fresh = now.full.filter(k=>!p.full.includes(k));
+  if(fresh.length) notify("full", "📦 "+fresh.map(k=>RES_BY[k].name).join(", ")+" "+(fresh.length > 1 ? "are" : "is")+" full", "anything more is going to waste.");
+  if(now.grass && !p.grass) notify("grass", "🌿 you can touch grass", "the infinite garden is up.");
+  if(now.nn > p.nn) notify("nn", "🌐 "+NEWNET[now.nn-1].name+" is done", now.nn >= NEWNET.length ? "the new internet is online." : "on to "+NEWNET[now.nn].name+".");
+}
+function notify(kind, title, body){
+  if(!S.settings.notify[kind] || !("Notification" in window) || Notification.permission!=="granted") return;
+  const o = { body, icon:"assets/icons/icon-192.png", badge:"assets/icons/favicon-32.png", tag:"network-"+kind };
+  if(SWREG && SWREG.showNotification) SWREG.showNotification(netName()+": "+title, o).catch(()=>{});
+  else try{ const n = new Notification(netName()+": "+title, o); n.onclick = ()=>{ window.focus(); n.close(); }; }catch(e){}
+}
+async function askNotify(){
+  if(!("Notification" in window)) return toast("this browser can't do notifications");
+  const ok = Notification.permission==="granted" || (await Notification.requestPermission())==="granted";
+  S.settings.notifyOn = ok;
+  if(!ok) toast("the browser said no. it can be changed in the site's settings.");
+  openSettings();
+}
+
+/* ---------- the app: installs, and plays offline ---------- */
+let installPrompt = null;
+const standalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone===true;
+function registerSW(){
+  if(!("serviceWorker" in navigator) || window.INLINE_FILES || !/^https?:$/.test(location.protocol)) return;
+  navigator.serviceWorker.register("sw.js").then(reg=>{ SWREG = reg; if(standalone()) keepOffline(true); }).catch(()=>{});
+  addEventListener("beforeinstallprompt", e=>{ e.preventDefault(); installPrompt = e; });
+  addEventListener("appinstalled", ()=>{ installPrompt = null; toast("🌸 installed. it plays offline too."); keepOffline(true); });
+}
+/* every trait picture, so new miladys look right with no connection (about 11 MB, once) */
+let offlineState = "";
+async function keepOffline(quietly){
+  if(!window.caches || !ASSETS || offlineState==="busy") return;
+  const urls = [];
+  for(const cfg in ASSETS.order) for(const layer in ASSETS[cfg]) for(const name of ASSETS[cfg][layer]) urls.push("assets/img/"+cfg+"/"+layer+"/"+name);
+  try{
+    const c = await caches.open("network-assets");
+    const have = new Set((await c.keys()).map(r=>decodeURIComponent(new URL(r.url).pathname)));
+    const want = urls.filter(u=>!have.has(decodeURIComponent(new URL(u, location.href).pathname)));
+    if(!want.length){ offlineState = "done"; if(!quietly) toast("every picture's already kept"); return; }
+    offlineState = "busy";
+    for(let i=0; i<want.length; i+=12){
+      await Promise.all(want.slice(i, i+12).map(u=>c.add(u).catch(()=>{})));
+      if($("set-offline")) $("set-offline").textContent = "keeping… "+Math.round((i+12)/want.length*100)+"%";
+    }
+    offlineState = "done";
+    if(!quietly) toast("📦 every picture kept. it plays offline now.");
+    if($("set-offline")) $("set-offline").textContent = "kept ✓";
+  }catch(e){ offlineState = ""; if(!quietly) toast("couldn't keep them all. try again with a connection."); }
+}
+
+/* ---------- the ending ---------- */
+function showEnding(){
+  if($("ending")) return;
+  S.endSeen = true; save(); syncName();
+  closeModal(); FX.ending(true); sfx.shiny();
+  const n = netName(), runs = resets(S)+1, met = S.nextId-1;
+  const lines = [
+    "you started alone, posting.",
+    "then someone else was there.",
+    "then a group chat. then a scene. then a movement.",
+    "you touched grass "+resets(S)+" time"+(resets(S)===1 ? "" : "s")+", and came back every time.",
+    "the old internet was a place you went.",
+    "this one is a place you are.",
+    "no center. no owner. nobody can log it off.",
+    esc(n)+" isn't growing any more.",
+    "it's grown.",
+  ];
+  const ov = el("div", "ending");
+  ov.id = "ending";
+  ov.innerHTML = '<div class="end-in">'+lines.map((l,i)=>'<p style="--d:'+(0.6+i*2.1)+'s">'+l+'</p>').join("")+
+    '<h1 style="--d:'+(0.6+lines.length*2.1+0.6)+'s">the new internet is online<span class="cursor">_</span></h1>'+
+    '<div class="end-stats" style="--d:'+(0.6+lines.length*2.1+2.2)+'s">'+
+      [["day", dayCount()], ["runs", runs], ["market cycles", fmt(S.stats.cycles)], ["posts", fmt(S.stats.clicks)], ["miladys met", fmt(met)], ["relics", Object.keys(S.relics).length+" / "+RELICS.length], ["played", fmtTime(S.stats.played)]]
+        .map(([k,v])=>'<div><span>'+k+'</span><b>'+v+'</b></div>').join("")+'</div>'+
+    '<div class="end-credits" style="--d:'+(0.6+lines.length*2.1+3.4)+'s"><p>made by <a href="https://tylerirl.com/" target="_blank" rel="noopener">tyler (in real life)</a> · trait art: remilia corporation, copyleft · not affiliated</p>'+
+      '<p>the network was always going to be infinite. thank you for growing it.</p>'+
+      '<div class="row"><button class="btn big" id="end-stay">keep posting</button><a class="btn small" href="https://cancel.tylerirl.com/">play the cancel is coming ↗</a></div></div>'+
+    '<button class="btn small end-skip" id="end-skip">skip</button></div>';
+  document.body.appendChild(ov);
+  const close = ()=>{ ov.classList.add("out"); FX.ending(false); setTimeout(()=>ov.remove(), 900); refresh(true); };
+  $("end-stay").onclick = close;
+  $("end-skip").onclick = ()=>{ ov.classList.add("skip"); $("end-skip").remove(); };
+  ov.querySelector('a[href*="cancel"]').addEventListener("click", save);
 }
 
 async function init(){
@@ -1548,7 +1908,8 @@ async function init(){
   $("title-reroll").onclick = ()=>{ S.you = rollLook(); drawYou(); const c = $("title-you"); c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop"); };
   $("btn-logon").onclick = ()=>{ S.started = true; S.last = Date.now(); save(); startGame(); };
   document.addEventListener("keydown", onKey);
-  document.addEventListener("visibilitychange", ()=>{ if(document.hidden) save(); else { raidBack = false; frame(); setTitle(); } });
+  document.addEventListener("visibilitychange", ()=>{ if(document.hidden) save(); else { raidBack = false; if(S.started && awaySnap){ catchUp(false); refresh(true); } frame(); setTitle(); } });
+  registerSW();
   window.addEventListener("pagehide", save);
   document.querySelectorAll('a[href*="cancel.tylerirl.com"]').forEach(a=>a.addEventListener("click", save)); // off to the other game: save on the way out
 

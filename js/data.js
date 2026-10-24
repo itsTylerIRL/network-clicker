@@ -256,6 +256,11 @@ const PERKS = [
   { id:"architect", name:"architect",       cost:10, fx:{wonderCost:-0.2}, desc:"the cathedral costs 20% less.", ng:4 },
   { id:"roots",     name:"deep roots",      cost:15, fx:{grassEach:0.01}, desc:"every grass you hold is worth 4% instead of 3%.", ng:3 },
   { id:"photo",     name:"photosynthesis",  cost:12, fx:{grass:0.25},    desc:"+25% grass every time you touch it.", ng:2 },
+  /* automation: the late runs play themselves a little. Each can be switched off on the network tab. */
+  { id:"automeme",  name:"meme machine",    cost:8,  fx:{}, auto:"meme",  desc:"🤖 once vibes are nearly full, the spare ones are memed for you.", ng:2 },
+  { id:"autotech",  name:"grad students",   cost:12, fx:{}, auto:"tech",  desc:"🤖 research does itself, the cheapest first.", ng:3 },
+  { id:"autobuild", name:"scripts",         cost:15, fx:{}, auto:"build", desc:"🤖 buildings buy themselves out of what's spare, the cheapest for your storage first.", ng:3 },
+  { id:"autoup",    name:"personal shopper",cost:12, fx:{}, auto:"up",    desc:"🤖 upgrades buy themselves.", ng:4 },
 ];
 
 /* what each reset opens, shown in the grass tab so the next one is something to look forward to */
@@ -265,6 +270,20 @@ const MILESTONES = [
   { n:3, name:"raids",                desc:"send miladys out raiding. they come home with loot, and relics you keep forever." },
   { n:4, name:"the cathedral",        desc:"ether 💠 and seers, and a cathedral of the network, ten stages tall." },
   { n:5, name:"challenges",           desc:"touch grass into a run with the rules bent, for rewards that last." },
+  { n:6, name:"the new internet",     desc:"the last thing to build, and bigger than any one run: seven stages, poured into a little at a time. what goes in stays when you touch grass." },
+];
+
+/* the new internet: the ending. Seven stages, each filled by pouring resources in (a share of what you make, and
+   everything that would overflow), kept across touching grass. Every stage finished is a bonus for good. */
+const NEWNET_NG = 6;
+const NEWNET = [
+  { id:"protocol",  icon:"📡", name:"the protocol",     desc:"write down how a network talks to itself.",           need:{lore:1.2e7,  compute:2.4e6},              fx:{all:0.25} },
+  { id:"nodes",     icon:"🖥️", name:"the nodes",        desc:"every milady runs a node.",                           need:{memes:1.8e7, cult:1.2e7}, req:{miladys:250}, fx:{all:0.25, housingMult:0.1} },
+  { id:"mesh",      icon:"🕸️", name:"the mesh",         desc:"threads between all of them. no center to cut.",      need:{drip:3.6e6,  clout:6e6},                fx:{all:0.25, happy:0.15} },
+  { id:"handshake", icon:"🤝", name:"the handshake",    desc:"everyone agrees to trust each other, a little.",      need:{devotion:1.8e6, cult:2.4e7},              fx:{all:0.25, ritualCd:-0.2} },
+  { id:"namespace", icon:"🏷️", name:"the namespace",    desc:"everyone gets a name. nobody owns the list.",         need:{lore:4.8e7,  memes:3.6e7, clout:1.8e7},     fx:{all:0.25, capAll:0.25} },
+  { id:"archive",   icon:"🗄️", name:"the archive",      desc:"nothing posted is ever lost again.",                  need:{compute:1.8e7, drip:1.2e7, ether:3.6e5},    fx:{all:0.25, grass:0.5} },
+  { id:"internet",  icon:"🌐", name:"the new internet", desc:"turn it on.",                                         need:{vibes:1.8e8, devotion:6e6, ether:1.2e6}, req:{cathedral:true}, fx:{all:1} },
 ];
 
 /* rituals: spend devotion for something now. cd is the cooldown in seconds. */
@@ -385,6 +404,10 @@ const ACHIEVEMENTS = [
   { id:"infinite", name:"the infinite",        desc:"finish the cathedral.",              test:s=>(s.wonder||0)>=WONDER.length },
   { id:"challenge",name:"rules are rules",     desc:"finish a challenge.",                test:s=>Object.keys(s.chDone||{}).length>=1 },
   { id:"challenges",name:"no rules",           desc:"finish every challenge.",            test:s=>CHALLENGES.every(c=>(s.chDone||{})[c.id]) },
+  { id:"robots",   name:"hands off",           desc:"let the robots buy 100 buildings in one run.", test:s=>((s.run.auto||{}).b||0)>=100 },
+  { id:"rfc",      name:"request for comments",desc:"finish the protocol.",               test:s=>((s.nn||{}).i||0)>=1 },
+  { id:"halfway",  name:"halfway there",       desc:"finish four stages of the new internet.", test:s=>((s.nn||{}).i||0)>=4 },
+  { id:"online",   name:"online",              desc:"turn on the new internet.",          test:s=>!!s.ended },
 ];
 
 const NAMES = ["Miyu","Lain","Sakura","Remi","Yuki","Hana","Momo","Kiki","Nana","Rin","Aoi","Mika","Luna","Coco","Pika","Suki",
