@@ -861,8 +861,14 @@ function update(){
   $("buffs").innerHTML = S.buffs.map(b=>'<span class="chip '+(b.happy<0 ? "bad" : "")+'">'+
     ({frenzy:"🔥 frenzy", glow:"✨ glow", drama:"💢 drama", prayer:"🙏 prayer", hyperpost:"⚡ hyperpost", vigil:"🕯️ vigil"}[b.kind]||b.kind)+" "+fmtTime(b.until-S.t)+"</span>").join("");
 
-  const mt = document.querySelector('#tabs [data-tab="miladys"]');
-  if(mt) mt.classList.toggle("alert", R.jobs.idle>0 && tab!=="miladys");
+  // tabs with something you can do right now light up, with how many
+  const ready = readyCounts();
+  document.querySelectorAll("#tabs [data-tab]").forEach(b=>{
+    const id = b.dataset.tab, n = id===tab ? 0 : ready[id]||0;
+    b.classList.toggle("ready", n>0);
+    if(n>0) b.dataset.n = n>9 ? "9+" : n; else delete b.dataset.n;
+    if(id==="miladys") b.classList.toggle("alert", R.jobs.idle>0 && tab!=="miladys");
+  });
   // the open tab
   const body = $("tab-body");
   body.querySelectorAll("[data-b]").forEach(c=>{
@@ -938,6 +944,19 @@ function update(){
     const next = Math.pow(g+1, 2)*500/Math.pow(1+(R.f.grass||0), 2);
     $("grass-why").textContent = !S.tech.garden ? "research the infinite garden first." : "next grass at "+fmt(next)+" $CULT this run.";
   }
+}
+
+/* what each tab has that you could do this second: buy, research, hold, send, build */
+function readyCounts(){
+  const c = {}, home = S.miladys.length - R.jobs.away;
+  c.network = BUILDINGS.filter(b=>shown(b) && canPay(S, priceOf(b, S))).length;
+  c.lore = TECHS.filter(t=>!S.tech[t.id] && techShown(t) && canPay(S, techPrice(t, S, R.f))).length;
+  c.upgrades = rule(S, "frugal") ? 0 : UPGRADES.filter(u=>!S.up[u.id] && shown(u) && canPay(S, u.cost)).length;
+  c.rituals = S.tech.iconography ? RITUALS.filter(r=>shown(r) && (S.cd[r.id]||0) <= S.t && canPay(S, ritualPrice(r, R.f))).length : 0;
+  c.raids = S.tech.raiding ? RAIDS.filter(r=>!S.raids.some(x=>x.id===r.id) && home >= r.n).length : 0;
+  c.cathedral = S.tech.geometry && (S.wonder||0) < WONDER.length && canPay(S, wonderPrice(S.wonder||0, R.f)) ? 1 : 0;
+  c.grass = PERKS.filter(p=>opened(S, p) && !S.perks[p.id] && S.grass >= p.cost).length + (S.tech.garden && grassGain(S, R.f) >= 1 ? 1 : 0);
+  return c;
 }
 
 /* rebuild when the set of things on screen changes, otherwise just update */

@@ -483,3 +483,12 @@ canvas.portrait[height="600"]{aspect-ratio:1;}
 .stage.next{color:var(--gold);background:rgba(241,250,140,.06);} .stage.next span{color:#bbb;}
 @media (max-width:600px){ .cathedral{grid-template-columns:1fr;} .spire{max-width:200px;margin:0 auto;} }
 body.calm .spire i.next{animation:none;}
+
+/* a tab with something you can afford right now: gold, breathing, and how many */
+.pick.ready{position:relative;color:var(--gold);border-color:rgba(241,250,140,.6);background:rgba(241,250,140,.06);animation:tabready 2.2s ease-in-out infinite;}
+.pick.ready::after{content:attr(data-n);position:absolute;top:-7px;right:-7px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;
+  background:var(--gold);color:#000;font-size:10px;font-weight:bold;line-height:16px;text-align:center;box-shadow:0 0 10px rgba(241,250,140,.6);}
+.pick.ready.alert::after{content:attr(data-n);} /* the count wins over the idle dot */
+.pick.ready:hover{background:rgba(241,250,140,.14);color:var(--gold);border-color:var(--gold);}
+@keyframes tabready{50%{box-shadow:0 0 14px rgba(241,250,140,.35);}}
+body.calm .pick.ready{animation:none;}
