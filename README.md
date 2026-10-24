@@ -23,6 +23,14 @@ You start alone, posting. Click your Milady and she posts, and posting makes vib
 
 It saves itself in your browser and keeps going while you're away (8 hours, or 24 with a perk). Settings can export a save to move it somewhere else.
 
+## Controls
+
+Mouse and touch do everything. On a phone, once your Milady scrolls out of view she floats in the corner so you can keep posting, and the tabs swipe sideways.
+
+The keyboard does everything too: arrow keys move a highlight over whatever's on screen, Enter presses it (shift+Enter does ten), Space posts, M makes a meme, Q / E or 1-9 change tabs, Esc backs out. A gamepad works the same way: d-pad or stick moves, Ⓐ presses, Ⓑ backs out, Ⓧ posts, Ⓨ makes a meme, LB / RB change tabs, START opens settings.
+
+Numbers can be written short (1.23M), scientific (1.23e6), engineering (45.6e6) or in words (1.23 million), in settings.
+
 ## Running it yourself
 
 It's a static site. No build step, no framework, no dependencies. Even the animated backdrop is the game's own canvas: it's your network, one node per milady, and the market sets its weather.

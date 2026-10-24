@@ -31,7 +31,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="the network">
-<link rel="stylesheet" href="css/style.css?v=cd3159bef7">
+<link rel="stylesheet" href="css/style.css?v=1d52e71fa3">
 </head>
 <body>
 <canvas id="bg-canvas" aria-hidden="true"></canvas>
@@ -100,17 +100,19 @@
         <div id="tab-body"></div>
       </main>
     </div>
-    <div class="hint">space posts · m makes a meme · shift-click does 10 · the game saves itself and keeps going while you're away</div>
+    <div class="hint">space posts · m makes a meme · arrows + enter drive everything · q / e change tabs · shift-click does 10 · a gamepad works too</div>
   </section>
 
+  <!-- phones: when your milady has scrolled away, she floats in the corner so you can keep posting -->
+  <button id="post-fab" aria-label="post"><canvas id="fab-you" width="600" height="750"></canvas></button>
   <div id="modal" class="hidden"><div class="panel" id="modal-panel"></div></div>
   <div id="toasts"></div>
 </div>
 <div id="grade" aria-hidden="true"></div>
 <canvas id="fx-canvas" aria-hidden="true"></canvas>
 <div id="phase-banner" aria-hidden="true"></div>
-<script src="js/data.js?v=cd3159bef7"></script>
-<script src="js/fx.js?v=cd3159bef7"></script>
-<script src="js/game.js?v=cd3159bef7"></script>
+<script src="js/data.js?v=1d52e71fa3"></script>
+<script src="js/fx.js?v=1d52e71fa3"></script>
+<script src="js/game.js?v=1d52e71fa3"></script>
 </body>
 </html>

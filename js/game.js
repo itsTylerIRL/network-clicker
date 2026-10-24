@@ -10,20 +10,31 @@ const RES_BY = Object.fromEntries(RES.map(r=>[r.id, r]));
 const JOB_BY = Object.fromEntries(JOBS.map(j=>[j.id, j]));
 
 /* ---------- numbers ---------- */
-const SUFFIX = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
+/* four ways to write a big number, picked in settings: short (1.23M), scientific (1.23e6), engineering (the exponent
+   in threes, like the suffixes: 1.23e6, 45.6e6) and words (1.23 million). Below a thousand they all agree. */
+const SUFFIX = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "UDc", "DDc", "TDc", "QaDc", "QiDc", "SxDc", "SpDc", "OcDc", "NoDc", "Vg"];
+const WORDS = ["", "thousand", "million", "billion", "trillion", "quadrillion", "quintillion", "sextillion", "septillion", "octillion", "nonillion",
+  "decillion", "undecillion", "duodecillion", "tredecillion", "quattuordecillion", "quindecillion", "sexdecillion", "septendecillion", "octodecillion", "novemdecillion", "vigintillion"];
+const NOTATIONS = { short:"1.23M", sci:"1.23e6", eng:"45.6e6", words:"1.23 million" };
+const sig3 = v => v<10 ? v.toFixed(2) : v<100 ? v.toFixed(1) : Math.floor(v).toString(); // three figures
 function fmt(n, dp){
   if(!isFinite(n)) return "∞";
   const neg = n<0; n = Math.abs(n);
   let out;
   if(n<1000) out = dp!=null ? n.toFixed(dp) : (n<10 && n%1 ? n.toFixed(1) : Math.floor(n).toString());
   else {
-    const k = Math.min(SUFFIX.length-1, Math.floor(Math.log10(n)/3));
-    const v = n/Math.pow(1000, k);
-    out = (v<10 ? v.toFixed(2) : v<100 ? v.toFixed(1) : Math.floor(v)) + SUFFIX[k];
+    const mode = (typeof S!=="undefined" && S && S.settings && S.settings.num) || "short";
+    const e = Math.floor(Math.log10(n)), k = Math.floor(e/3);
+    if(mode==="sci" || (k >= SUFFIX.length && mode!=="eng")) out = (n/Math.pow(10, e)).toFixed(2)+"e"+e;
+    else if(mode==="eng") out = sig3(n/Math.pow(1000, k))+"e"+k*3;
+    else if(mode==="words") out = sig3(n/Math.pow(1000, k))+" "+WORDS[k];
+    else out = sig3(n/Math.pow(1000, k))+SUFFIX[k];
   }
   return (neg ? "-" : "") + out;
 }
-const fmtRate = n => (n>=0 ? "+" : "") + (Math.abs(n)<10 && n!==0 ? n.toFixed(2) : fmt(n)) + "/s";
+/* a rate keeps a little more precision while it's small, so a trickle doesn't read as nothing */
+const fmtRate = n => { const a = Math.abs(n);
+  return (n>=0 ? "+" : "-") + (n===0 ? "0" : a<0.1 ? a.toFixed(3) : a<10 ? a.toFixed(2) : fmt(a)) + "/s"; };
 function fmtTime(sec){
   sec = Math.max(0, Math.round(sec));
   const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
@@ -972,7 +983,7 @@ function refresh(force){
   if(!$("tab-body")) return; // no page (the rules running headless)
   if(!tabs().some(t=>t.id===tab)) tab = "network";
   const s = signature();
-  if(force || s!==sig){ sig = s; build(); }
+  if(force || s!==sig){ sig = s; build(); navRestore(); }
   update();
 }
 
@@ -998,14 +1009,16 @@ function openModal(html){
   $("modal-panel").innerHTML = html;
   $("modal").classList.remove("hidden");
   $("modal-panel").querySelectorAll("[data-close]").forEach(b=>b.onclick = closeModal);
+  if(document.body.classList.contains("kb")){ const first = navItems($("modal-panel"))[0]; if(first){ navSel = null; navSet(first); } } // keys carry on into the popup
 }
-function closeModal(){ $("modal").classList.add("hidden"); }
+function closeModal(){ $("modal").classList.add("hidden"); if(navSel && !document.contains(navSel)) navSel = null; navRestore(); }
 
 function openSettings(){
   openModal('<h2>settings</h2>'+
     '<div class="set-row"><span>sound</span><button class="tog'+(S.settings.mute ? "" : " on")+'" id="set-mute">'+(S.settings.mute ? "off" : "on")+'</button></div>'+
     '<div class="set-row"><span>animated backdrop</span><button class="tog'+(S.settings.bg!==false ? " on" : "")+'" id="set-bg">'+(S.settings.bg!==false ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>calm (less motion)</span><button class="tog'+(S.settings.calm ? " on" : "")+'" id="set-calm">'+(S.settings.calm ? "on" : "off")+'</button></div>'+
+    '<div class="set-row"><span>numbers</span><span class="seg">'+Object.keys(NOTATIONS).map(k=>'<button class="pick'+((S.settings.num||"short")===k ? " on" : "")+'" data-num="'+k+'">'+NOTATIONS[k]+'</button>').join("")+'</span></div>'+
     '<div class="set-row"><span>your milady</span><button class="btn small" id="set-reroll">reroll her</button></div>'+
     '<div class="set-row"><span>save</span><span><button class="btn small" id="set-export">export</button> <button class="btn small" id="set-import">import</button></span></div>'+
     '<textarea id="save-box" class="save-box hidden" spellcheck="false"></textarea>'+
@@ -1015,6 +1028,7 @@ function openSettings(){
   $("set-mute").onclick = ()=>{ S.settings.mute = !S.settings.mute; syncMute(); openSettings(); };
   $("set-bg").onclick = ()=>{ S.settings.bg = S.settings.bg===false; syncLook(); openSettings(); };
   $("set-calm").onclick = ()=>{ S.settings.calm = !S.settings.calm; syncLook(); openSettings(); };
+  document.querySelectorAll("#modal [data-num]").forEach(b=>b.onclick = ()=>{ S.settings.num = b.dataset.num; refresh(true); renderLog(); openSettings(); });
   $("set-reroll").onclick = ()=>{ S.you = rollLook(); drawYou(); };
   $("set-export").onclick = ()=>{
     save();
@@ -1050,7 +1064,9 @@ function openHelp(){
     '<p>the <b>market</b> goes round: accumulation, mania, distribution, bear. each one is good for something.</p>'+
     '<p>catch the <b>💎 sparkles</b> when they show up.</p>'+
     '<p>much later you can <b>touch grass</b>: start over with grass 🌿 that makes everything faster, forever. every time you do, something new opens: compute and devs, then rituals and remilios, then raids and relics, then a cathedral, then challenges. the grass tab says what\'s next.</p>'+
-    '<p class="note">the game keeps going while you\'re away (up to 8 hours). keys: space posts, m makes a meme.</p>'+
+    '<p class="note">the game keeps going while you\'re away (up to 8 hours).</p>'+
+    '<div class="keys"><b>keys</b><span>arrows move the highlight · enter presses it (shift+enter does 10) · space posts · m makes a meme · q / e or 1-9 change tabs · esc backs out</span>'+
+    '<b>gamepad</b><span>d-pad or stick moves · Ⓐ press · Ⓑ back · Ⓧ post · Ⓨ meme it · LB / RB tabs · START settings</span></div>'+
     '<p>want something with more fight in it? <a href="https://cancel.tylerirl.com/">the cancel is coming</a> is this one\'s companion: a roguelite with the same miladys. your network keeps growing while you play it.</p>'+
     '<div class="row"><button class="btn small" data-close>got it</button></div>');
 }
@@ -1058,7 +1074,7 @@ function openHelp(){
 /* ---------- you ---------- */
 async function drawYou(){
   const cv = await compose(S.you, true);
-  for(const id of ["you", "title-you"]){
+  for(const id of ["you", "title-you", "fab-you"]){
     const c = $(id); if(!c) continue;
     const cx = c.getContext("2d"); cx.clearRect(0, 0, 600, 750); cx.drawImage(cv, 0, 0);
   }
@@ -1108,6 +1124,126 @@ async function checkVersion(){
   }catch(e){}
 }
 
+/* ---------- keys and pads ----------
+   The arrow keys (or a d-pad, or the stick) move a highlight over whatever is on screen, or inside a popup when one is
+   open; Enter (Ⓐ) presses it, shift+Enter presses it ten times over where that means something. Space (Ⓧ) posts,
+   M (Ⓨ) makes a meme, Q/E (LB/RB) and 1-9 change tabs, Esc (Ⓑ) backs out, START opens settings. The highlight only
+   shows once a key or pad has been used, and the mouse hides it again. It survives a tab being rebuilt: it remembers
+   what it was on, not the element. */
+let navSel = null, navMemo = "";
+const NAV_KEYS = ["tab","b","t","u","p","rit","raid","ws","ch","m","num","job","d"];
+const modalOpen = () => !$("modal").classList.contains("hidden");
+function navScope(){ return modalOpen() ? $("modal-panel") : document.querySelector(".screen.active"); }
+function navItems(scope){
+  return scope ? [...scope.querySelectorAll("button, select, input, a[href]")].filter(el=>!el.disabled && el.offsetParent!==null) : [];
+}
+function navMemoOf(el){ // something about this element that the rebuilt one will share
+  const row = el.closest("[data-j]"), k = NAV_KEYS.find(k=>el.dataset[k]!=null);
+  return (row ? "j:"+row.dataset.j+":" : "") + (k ? k+":"+el.dataset[k] : el.id ? "#"+el.id : "");
+}
+function navSet(el){
+  if(navSel && navSel!==el) navSel.classList.remove("ksel");
+  navSel = el;
+  if(!el) return;
+  el.classList.add("ksel"); navMemo = navMemoOf(el);
+  el.scrollIntoView({ block:"nearest", inline:"nearest" });
+}
+function navRestore(){ // after a rebuild: find what we were on
+  if(!navMemo || (navSel && document.contains(navSel))) return;
+  const el = navItems(navScope()).find(e=>navMemoOf(e)===navMemo);
+  if(el){ navSel = el; el.classList.add("ksel"); } else navSel = null;
+}
+function navMove(dx, dy){ // step to the nearest thing in that direction
+  const items = navItems(navScope());
+  if(!items.length) return;
+  if(!navSel || !items.includes(navSel)) return navSet(items.find(e=>e.classList.contains("on")) || items[0]);
+  const a = navSel.getBoundingClientRect(), ax = a.left+a.width/2, ay = a.top+a.height/2;
+  let best = null, bestD = Infinity;
+  for(const e of items){
+    if(e===navSel) continue;
+    const r = e.getBoundingClientRect(), ex = r.left+r.width/2, ey = r.top+r.height/2;
+    const along = dx ? (ex-ax)*dx : (ey-ay)*dy, across = dx ? Math.abs(ey-ay) : Math.abs(ex-ax);
+    if(along < (dx ? 4 : (a.height+r.height)/4)) continue; // not that way (up and down have to reach another row)
+    if(dx && across > Math.max(a.height, r.height)*0.6) continue; // left and right stay on the row
+    const d = along + across*2.5;
+    if(d < bestD){ bestD = d; best = e; }
+  }
+  if(!best && dx){ const i = items.indexOf(navSel); best = items[(i+(dx>0 ? 1 : -1)+items.length)%items.length]; } // the end of a row wraps
+  if(best) navSet(best);
+}
+function navPress(shift){
+  if(!navSel || !document.contains(navSel)) return navMove(0, 1);
+  if(navSel.id==="you-wrap") return postFromKeys();
+  if(navSel.tagName==="SELECT"){ navSel.selectedIndex = (navSel.selectedIndex+1)%navSel.options.length; navSel.dispatchEvent(new Event("change")); return; }
+  if(navSel.tagName==="INPUT") return navSel.focus();
+  navSel.dispatchEvent(new MouseEvent("click", { bubbles:true, cancelable:true, shiftKey:!!shift }));
+  navRestore();
+}
+function postFromKeys(){
+  const w = $("you-wrap"), r = w.getBoundingClientRect();
+  if(r.bottom < 0 || r.top > innerHeight){ const f = $("post-fab"); if(f && f.offsetParent){ const q = f.getBoundingClientRect(); return post({ clientX:q.left+q.width/2, clientY:q.top }); } }
+  post({ clientX:r.left+r.width/2, clientY:r.top+r.height/3 });
+}
+function stepTab(d){
+  const ts = tabs(), i = ts.findIndex(t=>t.id===tab), n = ts[(i+d+ts.length)%ts.length];
+  if(n){ const b = document.querySelector('#tabs [data-tab="'+n.id+'"]'); if(b) b.click(); }
+}
+function onKey(e){
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  const typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName), arrow = { ArrowUp:[0,-1], ArrowDown:[0,1], ArrowLeft:[-1,0], ArrowRight:[1,0] }[e.key];
+  if(e.key==="Escape"){
+    if(typing) e.target.blur();
+    if(modalOpen()) closeModal(); else { navSet(null); document.body.classList.remove("kb"); }
+    return;
+  }
+  if(typing && e.key!=="Enter") return; // a field keeps its keys
+  if(arrow || e.key==="Enter") document.body.classList.add("kb");
+  if(arrow){ e.preventDefault(); return navMove(arrow[0], arrow[1]); }
+  if(e.key==="Enter"){ e.preventDefault(); if(typing){ e.target.blur(); return; } return navPress(e.shiftKey); }
+  if(!S.started || modalOpen()) return;
+  if(e.key===" "){ e.preventDefault(); if(document.activeElement && document.activeElement!==document.body) document.activeElement.blur(); if(!e.repeat) postFromKeys(); }
+  else if(e.key==="m" || e.key==="M") memeIt(e.shiftKey ? 10 : 1);
+  else if(e.key==="q" || e.key==="[") stepTab(-1);
+  else if(e.key==="e" || e.key==="]") stepTab(1);
+  else if(/^[1-9]$/.test(e.key)){ const t = tabs()[+e.key-1]; if(t){ const b = document.querySelector('#tabs [data-tab="'+t.id+'"]'); if(b) b.click(); } }
+  else if(e.key==="?") openHelp();
+}
+/* a pad is turned into the same keys. Directions repeat while held; buttons don't (posting is a press, not a hold). */
+const PAD = { on:false, held:{}, raf:0, keys:{ 12:"ArrowUp", 13:"ArrowDown", 14:"ArrowLeft", 15:"ArrowRight", 0:"Enter", 1:"Escape", 2:" ", 3:"m", 4:"q", 5:"e", 8:"?", 9:"Start" } };
+function padFire(key){
+  if(!PAD.on){ PAD.on = true; document.body.classList.add("pad"); padHints(); }
+  if(key==="Start") return modalOpen() ? closeModal() : (S.started && openSettings());
+  if(key==="Enter" && !navSel) document.body.classList.add("kb");
+  onKey({ key, target:document.body, shiftKey:false, ctrlKey:false, metaKey:false, altKey:false, repeat:false, preventDefault(){} });
+}
+function padHints(){
+  const h = document.querySelector("#screen-main .hint"); if(!h) return;
+  if(!h.dataset.keys) h.dataset.keys = h.textContent;
+  h.textContent = PAD.on ? "d-pad or stick moves the highlight · Ⓐ press · Ⓑ back · Ⓧ post · Ⓨ meme it · LB/RB tabs · START settings · SELECT help" : h.dataset.keys;
+}
+function padPoll(){
+  const gp = [...(navigator.getGamepads ? navigator.getGamepads() : [])].find(g=>g && g.connected);
+  if(!gp){ PAD.raf = 0; return; }
+  PAD.raf = requestAnimationFrame(padPoll);
+  if(document.hidden) return;
+  const now = performance.now(), want = {};
+  gp.buttons.forEach((b,i)=>{ if(b.pressed && PAD.keys[i]) want[PAD.keys[i]] = 1; });
+  const [x=0, y=0] = gp.axes;
+  if(Math.abs(x)>0.6 || Math.abs(y)>0.6) want[Math.abs(x)>Math.abs(y) ? (x>0 ? "ArrowRight" : "ArrowLeft") : (y>0 ? "ArrowDown" : "ArrowUp")] = 1;
+  for(const k in want){
+    const h = PAD.held[k];
+    if(!h){ PAD.held[k] = { t:now, n:0 }; padFire(k); }
+    else if(k.startsWith("Arrow") && now-h.t > (h.n ? 120 : 320)){ h.t = now; h.n++; padFire(k); }
+  }
+  for(const k in PAD.held) if(!want[k]) delete PAD.held[k];
+}
+window.addEventListener("gamepadconnected", ()=>{ if(!PAD.raf) PAD.raf = requestAnimationFrame(padPoll); });
+window.addEventListener("gamepaddisconnected", ()=>{ PAD.held = {}; });
+document.addEventListener("mousemove", ()=>{
+  document.body.classList.remove("kb");
+  if(PAD.on){ PAD.on = false; document.body.classList.remove("pad"); padHints(); }
+}, { passive:true });
+
 /* ---------- start ---------- */
 /* the interface is laid out for 1440x900; a bigger window scales it up (never down, and at most 1.6x) */
 function fitUI(){
@@ -1147,6 +1283,9 @@ async function init(){
   if(!S.you) S.you = rollLook();
   // the bindings
   $("you-wrap").addEventListener("click", post);
+  $("post-fab").addEventListener("click", post);
+  // the floating post button shows while your milady is off screen (it's only ever visible in the phone layout)
+  if(window.IntersectionObserver) new IntersectionObserver(es=>document.body.classList.toggle("you-off", !es[0].isIntersecting && $("screen-main").classList.contains("active"))).observe($("you-wrap"));
   $("btn-meme").onclick = e=>memeIt(e.shiftKey ? 10 : 1);
   $("modal").addEventListener("click", e=>{ if(e.target.id==="modal") closeModal(); });
   document.querySelectorAll(".gear").forEach(b=>b.onclick = openSettings);
@@ -1157,13 +1296,7 @@ async function init(){
   });
   $("title-reroll").onclick = ()=>{ S.you = rollLook(); drawYou(); const c = $("title-you"); c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop"); };
   $("btn-logon").onclick = ()=>{ S.started = true; S.last = Date.now(); save(); startGame(); };
-  document.addEventListener("keydown", e=>{
-    if(!S.started || e.target.tagName==="INPUT" || e.target.tagName==="TEXTAREA") return;
-    if(e.key==="Escape") return closeModal();
-    if(!$("modal").classList.contains("hidden")) return;
-    if(e.key===" "){ e.preventDefault(); if(!e.repeat){ const r = $("you").getBoundingClientRect(); post({ clientX:r.left+r.width/2, clientY:r.top+r.height/3 }); } }
-    else if(e.key==="m") memeIt(e.shiftKey ? 10 : 1);
-  });
+  document.addEventListener("keydown", onKey);
   document.addEventListener("visibilitychange", ()=>{ if(document.hidden) save(); else frame(); });
   window.addEventListener("pagehide", save);
   document.querySelectorAll('a[href*="cancel.tylerirl.com"]').forEach(a=>a.addEventListener("click", save)); // off to the other game: save on the way out
