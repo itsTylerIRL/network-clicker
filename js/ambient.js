@@ -72,7 +72,7 @@ const AMBIENT = (()=>{
       const rx = W/2 - Math.min(W*0.13, 170), ry0 = (bottom - top)/2;
       const slotW2 = Math.min(W*0.24, 2*Math.PI*(rx + ry0)/2/k*0.82), slotH = Math.min((bottom - top)*0.26, 2*Math.PI*ry0/k*0.62); // the crowds up the sides are as close as the ring is short
       const ry = ry0 - slotH/2 - 22*ui; // the top and bottom crowds, labels and all, stay inside
-      crowds = jobs.map((c, i)=>{ const a = -Math.PI/2 + (i + 0.5)/k*Math.PI*2;
+      crowds = jobs.map((c, i)=>{ const a = -Math.PI/2 + (i + (k===1 ? 0 : 0.5))/k*Math.PI*2; // a crowd on its own stands above you, clear of the strip
         return Object.assign(c, { x:you.x + Math.cos(a)*rx, y:you.y + Math.sin(a)*ry - 10*ui, sw:slotW2, sh:slotH }); });
     } else {
       you.s = Math.min(W*0.34, (bottom - top)*0.18); you.x = W/2; you.y = top + you.s*0.62;

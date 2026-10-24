@@ -339,7 +339,7 @@ body.grassing #grade{animation:grassing 2.6s ease-out;}
 @keyframes grassing{0%{background:rgba(80,250,123,0);}15%{background:rgba(220,255,225,.9);}45%{background:rgba(80,250,123,.35);}100%{background:rgba(80,250,123,0);}}
 
 /* the market turns: its name comes across the screen */
-#phase-banner{position:fixed;left:0;right:0;top:38%;z-index:126;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:4px;opacity:0;
+#phase-banner{position:fixed;left:0;right:0;top:38%;z-index:137;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:4px;opacity:0;
   --pc:#8be9fd;padding:18px 0;}
 #phase-banner::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(0,0,0,.75) 20%,rgba(0,0,0,.75) 80%,transparent);
   border-top:1px solid var(--pc);border-bottom:1px solid var(--pc);box-shadow:0 0 40px -10px var(--pc);z-index:-1;}
