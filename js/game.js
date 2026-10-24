@@ -184,7 +184,7 @@ function tick(s, dt, live){
   const after = Math.floor(s.phaseT/PHASE_SECS);
   if(after!==before){
     if(after % PHASES.length===0){ s.cycle++; s.stats.cycles++; }
-    if(live && !rule(s, "bear")){ const p = phase(s); FX.phase(p); log(p.icon+" the market turns: <b style='color:"+p.color+"'>"+p.name+"</b>. "+p.desc+"."); }
+    if(live && !rule(s, "bear")){ const p = phase(s); FX.phase(p); react({ mania:"hype", bear:"worry", dist:"smug", accum:"calm" }[p.id]); log(p.icon+" the market turns: <b style='color:"+p.color+"'>"+p.name+"</b>. "+p.desc+"."); }
   }
 
   // miladys turn up while there's room and something to eat; they leave when there isn't
@@ -201,7 +201,7 @@ function tick(s, dt, live){
       const home = s.miladys.filter(m=>!m.away), m = home.find(m=>!m.job) || home[home.length-1];
       if(m){
         s.miladys.splice(s.miladys.indexOf(m), 1);
-        if(live) log("🥀 <b>"+m.name+"</b> logged off. "+(n>R.housing ? "no room." : "the vibes ran out."), "bad");
+        if(live){ log("🥀 <b>"+m.name+"</b> logged off. "+(n>R.housing ? "no room." : "the vibes ran out."), "bad"); react("sad"); }
       }
     }
   } else s.timers.leave = 0;
@@ -248,7 +248,7 @@ function finishStage(s, live){
   s.nn.i++; s.nn.got = {};
   if(s.nn.i >= NEWNET.length){ s.ended = Date.now(); s.endSeen = false; }
   if(!live) return;
-  sfx.shiny(); FX.research();
+  sfx.shiny(); FX.research(); react("love");
   log(st.icon+" the new internet: <b>"+st.name+"</b> is done. "+fxDesc(st.fx)+", for good.");
   if(s.ended) showEnding();
 }
@@ -310,7 +310,7 @@ function liveEvents(s, dt, R){
     s.timers.drama = 150 + rnd()*120;
     if(s.miladys.length >= 8 && rnd() < 0.35*Math.max(0, 1 - R.jobs.mod*0.1)){
       s.buffs.push({ kind:"drama", happy:-0.15, until:s.t+90 });
-      log("💢 drama in the group chat. -15% happiness for 90s."+(s.tech.moderation ? " mods would help." : ""), "bad");
+      log("💢 drama in the group chat. -15% happiness for 90s."+(s.tech.moderation ? " mods would help." : ""), "bad"); react("drama");
     }
   }
   s.timers.feed -= dt;
@@ -459,7 +459,9 @@ function post(e){
   const got = gain(S, "vibes", R.click, R.cap.vibes);
   S.stats.clicks++;
   sfx.post();
-  if(POST_MILESTONES.includes(S.stats.clicks)) celebrate(S.stats.clicks);
+  lastTouch = Date.now();
+  react(got>0 ? "talk" : "full");
+  if(POST_MILESTONES.includes(S.stats.clicks)){ celebrate(S.stats.clicks); react("love"); }
   const you = $("you-wrap");
   you.classList.remove("boop"); void you.offsetWidth; you.classList.add("boop");
   if(e && e.clientX!=null){ floatText(e.clientX, e.clientY, got>0 ? "+"+fmt(R.click)+" 🌸" : "full 🌸"); if(got>0) FX.post(e.clientX, e.clientY); }
@@ -505,21 +507,21 @@ function buyBuilding(id, card, shift){
   let n = 0;
   while(n < want && canPay(S, priceOf(b, S))){ pay(S, priceOf(b, S)); S.b[id]++; n++; } // as many of them as you can afford
   if(!n) return sfx.no();
-  sfx.buy(); FX.buy(card, n>1);
+  sfx.buy(); FX.buy(card, n>1); react(n>1 ? "big" : "buy");
   if(S.b[id]===n) log("🏗️ you built your first <b>"+b.name+"</b>"+(n>1 ? ", and "+(n-1)+" more" : "")+".");
   refresh();
 }
 function buyTech(id, card){
   const t = byId(TECHS, id), c = techPrice(t, S);
   if(S.tech[id] || !canPay(S, c)) return sfx.no();
-  pay(S, c); S.tech[id] = true; sfx.buy(); FX.buy(card, true); FX.research();
+  pay(S, c); S.tech[id] = true; sfx.buy(); FX.buy(card, true); FX.research(); react("study");
   log("📜 researched <b>"+t.name+"</b>. "+t.desc);
   refresh();
 }
 function buyUpgrade(id, card){
   const u = byId(UPGRADES, id);
   if(S.up[id] || !canPay(S, u.cost)) return sfx.no();
-  pay(S, u.cost); S.up[id] = true; sfx.buy(); FX.buy(card);
+  pay(S, u.cost); S.up[id] = true; sfx.buy(); FX.buy(card); react("buy");
   log("✨ <b>"+u.name+"</b>: "+u.desc);
   refresh();
 }
@@ -568,7 +570,7 @@ function touchGrass(into){
       nn:S.nn, auto:S.auto, ended:S.ended, endSeen:S.endSeen, stats:Object.assign(S.stats, { resets:S.stats.resets+1 }), log:[], nextId:S.nextId };
     S = fresh(keep);
     applyPerksAtStart(S);
-    closeModal(); sfx.shiny(); FX.grass(); galleryKnown = null;
+    closeModal(); sfx.shiny(); FX.grass(); galleryKnown = null; react("calm");
     log("🌿 you touched grass. +"+g+" grass. the network starts again, and it remembers you.");
     if(next) log("🔓 new: <b>"+next.name+"</b>. "+next.desc);
     if(met) log("✅ challenge beaten: <b>"+cur.name+"</b>. "+cur.rdesc+".");
@@ -587,7 +589,7 @@ function applyPerksAtStart(s){
 function buyPerk(id, card){
   const p = byId(PERKS, id);
   if(S.perks[id] || S.grass < p.cost || !opened(S, p)) return sfx.no();
-  S.grass -= p.cost; S.perks[id] = true; sfx.buy(); FX.buy(card, true);
+  S.grass -= p.cost; S.perks[id] = true; sfx.buy(); FX.buy(card, true); react("big");
   log("🌿 perk: <b>"+p.name+"</b>. "+p.desc);
   refresh();
 }
@@ -599,6 +601,7 @@ function holdRitual(id, card){
   pay(S, c);
   S.cd[id] = S.t + r.cd * Math.max(0.2, 1 + (R.f.ritualCd||0));
   S.stats.rituals = (S.stats.rituals||0) + 1;
+  react(id==="bull" || id==="airdrop" ? "hype" : "pray");
   let msg = r.desc;
   if(id==="prayer") S.buffs.push({ kind:"prayer", happy:0.3, until:S.t+120 });
   else if(id==="hyperpost") S.buffs.push({ kind:"hyperpost", click:9, until:S.t+30 });
@@ -666,7 +669,7 @@ function raidHome(s, i, live){
     (relic ? " they found a relic: "+relic.icon+" <b>"+relic.name+"</b>"+(s.relics[relic.id]>1 ? " (level "+s.relics[relic.id]+")" : "")+"." : "");
   log(msg, lost.length ? "bad" : "");
   if(document.hidden) raidBack = true;
-  if(live){ toast(msg, 5000); if(relic) sfx.shiny(); }
+  if(live){ toast(msg, 5000); if(relic) sfx.shiny(); react(relic ? "shiny" : "smug"); }
 }
 
 /* ---------- the cathedral ---------- */
@@ -674,7 +677,7 @@ function buildStage(card){
   const i = S.wonder||0; if(i >= WONDER.length || !S.tech.geometry) return sfx.no();
   const c = wonderPrice(i, R.f);
   if(!canPay(S, c)) return sfx.no();
-  pay(S, c); S.wonder = i+1; sfx.shiny(); FX.buy(card, true); FX.research();
+  pay(S, c); S.wonder = i+1; sfx.shiny(); FX.buy(card, true); FX.research(); react("shiny");
   log("⛪ the cathedral: <b>"+WONDER[i].name+"</b> is finished."+(S.wonder===WONDER.length ? " it's done. it was always going to be infinite." : ""));
   refresh(true);
 }
@@ -692,7 +695,7 @@ function spawnSparkle(){
   setTimeout(()=>sp.remove(), 13000);
 }
 function catchSparkle(){
-  S.stats.sparkles++; sfx.shiny();
+  S.stats.sparkles++; sfx.shiny(); react("shiny");
   const roll = rnd(), room = S.miladys.length < R.housing;
   let msg;
   if(roll < 0.25 && room){
@@ -1471,6 +1474,7 @@ function openSettings(){
     '<div class="set-row"><span>your milady</span><button class="btn small" id="set-reroll">reroll her</button></div>'+
     '<div class="set-row"><span>effects volume</span><input id="set-vol" type="range" min="0" max="100" value="'+(S.settings.vol!=null ? S.settings.vol : 70)+'"></div>'+
     '<div class="set-row"><span>your network\'s name</span><span><input id="set-name" class="name-in" maxlength="24" placeholder="the network" value="'+esc(S.netName||"")+'"> <button class="btn small" id="set-name-ok">name it</button></span></div>'+
+    '<div class="set-row"><span>her face reacts</span><button class="tog'+(S.settings.faces!==false ? " on" : "")+'" id="set-faces">'+(S.settings.faces!==false ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>wear your relics</span><button class="tog'+(S.settings.wear!==false ? " on" : "")+'" id="set-wear">'+(S.settings.wear!==false ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>notifications<br><span class="note">only while the game\'s in a background tab</span></span><button class="tog'+(S.settings.notifyOn ? " on" : "")+'" id="set-notify">'+(S.settings.notifyOn ? "on" : "off")+'</button></div>'+
     (S.settings.notifyOn ? '<div class="set-row notify-kinds">'+Object.keys(NOTIFY_WHAT).map(k=>'<button class="tog'+(S.settings.notify[k] ? " on" : "")+'" data-notify="'+k+'">'+NOTIFY_WHAT[k]+'</button>').join("")+'</div>' : "")+
@@ -1488,6 +1492,7 @@ function openSettings(){
   $("set-vol").onchange = ()=>sfx.post();
   $("set-name-ok").onclick = ()=>{ S.netName = $("set-name").value.trim().slice(0, 24); syncName(); toast(S.netName ? "🌸 "+esc(S.netName)+" is growing" : "it's the network again"); };
   $("set-wear").onclick = ()=>{ S.settings.wear = S.settings.wear===false; drawYou(); openSettings(); };
+  $("set-faces").onclick = ()=>{ S.settings.faces = S.settings.faces===false; face = null; faceTick(); openSettings(); };
   $("set-notify").onclick = ()=>{ if(S.settings.notifyOn){ S.settings.notifyOn = false; openSettings(); } else askNotify(); };
   document.querySelectorAll("#modal [data-notify]").forEach(b=>b.onclick = ()=>{ const k = b.dataset.notify; S.settings.notify[k] = !S.settings.notify[k]; openSettings(); });
   if($("set-install")) $("set-install").onclick = async ()=>{ installPrompt.prompt(); await installPrompt.userChoice.catch(()=>{}); installPrompt = null; openSettings(); };
@@ -1536,12 +1541,67 @@ function youLook(){
   return look;
 }
 let wornNow = "";
+/* her face: what happens to the network shows on it. A reaction swaps in other eyes, a mouth, brows or a blush from
+   the milady trait layers for a moment; a mood (frenzy, dozing off) holds while it lasts; she blinks now and then.
+   Everything else she's wearing stays put. pri: a reaction only cuts in over one that matters less. */
+const FACES = {
+  talk:   { Mouth:"Open.webp", ms:110, pri:0 },
+  blink:  { Eyes:"Closed.webp", ms:130, pri:0 },
+  full:   { Mouth:"Hm.webp", Brows:"Flat.webp", ms:700, pri:1 },
+  buy:    { Mouth:"Smile C.webp", ms:800, pri:1 },
+  big:    { Eyes:"Sparkle.webp", Mouth:"Smile B.webp", ms:1300, pri:2 },
+  study:  { Eyes:"Dilated.webp", Mouth:"Hm.webp", ms:1400, pri:2 },
+  pray:   { Eyes:"Closed.webp", Mouth:"3.webp", ms:1800, pri:2 },
+  smug:   { Eyes:"Smug.webp", Mouth:"Smug.webp", Brows:"Complacent A.webp", ms:2200, pri:2 },
+  hype:   { Eyes:"Sparkle.webp", Mouth:"Open.webp", ms:2200, pri:2 },
+  worry:  { Eyes:"Teary.webp", Mouth:"Flat.webp", Brows:"Concerned A.webp", ms:2400, pri:2 },
+  sad:    { Eyes:"Crying.webp", Mouth:"Pout.webp", Brows:"Concerned B.webp", ms:2200, pri:3 },
+  drama:  { Eyes:"Teary.webp", Mouth:"Crooked.webp", Brows:"Concerned C.webp", ms:3000, pri:3 },
+  shiny:  { Eyes:"Sparkle.webp", Mouth:"W.webp", Face:"Blush.webp", ms:1800, pri:3 },
+  calm:   { Eyes:"Closed.webp", Mouth:"Smile A.webp", Face:"Line Blush.webp", ms:2600, pri:3 },
+  love:   { Eyes:"Heart.webp", Mouth:"Cat.webp", Face:"Big Blush.webp", ms:2600, pri:4 },
+  frenzy: { Eyes:"Spiral.webp", Mouth:"Open.webp", pri:1 },  // a mood: held while the frenzy lasts
+  sleepy: { Eyes:"Sleepy.webp", Mouth:"Flat.webp", pri:0 },  // a mood: nobody's posted in a while
+  asleep: { Eyes:"Closed.webp", Mouth:"3.webp", pri:0 },
+};
+const FACE_LAYERS = ["Eyes", "Mouth", "Brows", "Face"];
+let face = null, faceUntil = 0, faceMood = "", faceNow = "", faceSeq = 0, lastTouch = Date.now(), nextBlink = 0;
+const facesOn = () => S && S.settings.faces!==false;
+function react(name){
+  const f = FACES[name]; if(!f || !facesOn()) return;
+  const now = performance.now();
+  if(face && now < faceUntil && FACES[face].pri > f.pri) return;
+  face = name; faceUntil = now + f.ms;
+  faceTick();
+}
+function faceLook(){
+  const look = youLook();
+  if(!facesOn()) return look;
+  const now = performance.now(), f = FACES[face && now < faceUntil ? face : faceMood];
+  if(f) for(const l of FACE_LAYERS) if(f[l]) look[l] = f[l];
+  return look;
+}
+/* about ten times a second: is it time to blink, has a reaction run out, has the mood changed */
+function faceTick(){
+  if(!S) return;
+  const now = performance.now();
+  if(face && now >= faceUntil) face = null;
+  const idle = Date.now() - lastTouch;
+  faceMood = S.buffs.some(b=>b.kind==="frenzy") ? "frenzy" : idle > 300000 ? "asleep" : idle > 90000 ? "sleepy" : "";
+  if(!face && faceMood!=="asleep" && now > nextBlink){ if(nextBlink) react("blink"); nextBlink = now + 2500 + rnd()*4000; }
+  const key = JSON.stringify(faceLook());
+  if(key !== faceNow){ faceNow = key; drawYou(); }
+}
 async function drawYou(){
-  const cv = await compose(youLook(), true);
+  const seq = ++faceSeq, cv = await compose(faceLook(), true);
+  if(seq !== faceSeq) return; // a newer face was asked for while this one was being put together
   for(const id of ["you", "title-you", "fab-you"]){
     const c = $(id); if(!c) continue;
     const cx = c.getContext("2d"); cx.clearRect(0, 0, 600, 750); cx.drawImage(cv, 0, 0);
   }
+}
+function warmFaces(){ // every face she can make, loaded ahead so the first of each isn't late
+  for(const f of Object.values(FACES)) for(const l of FACE_LAYERS) if(f[l]) loadImg("assets/img/Milady/"+l+"/"+f[l]).catch(()=>{});
 }
 
 /* ---------- time away ---------- */
@@ -1582,7 +1642,7 @@ function checkAch(){
   for(const a of ACHIEVEMENTS){
     if(S.ach[a.id]) continue;
     let ok = false; try{ ok = a.test(S, R); }catch(e){}
-    if(ok){ S.ach[a.id] = Date.now(); toast("🏆 <b>"+a.name+"</b> · "+a.desc+' <span class="dim">+'+pct(ACH_EACH)+' everything</span>', 4200); log("🏆 achievement: <b>"+a.name+"</b>."); sfx.shiny(); }
+    if(ok){ S.ach[a.id] = Date.now(); react("love"); toast("🏆 <b>"+a.name+"</b> · "+a.desc+' <span class="dim">+'+pct(ACH_EACH)+' everything</span>', 4200); log("🏆 achievement: <b>"+a.name+"</b>."); sfx.shiny(); }
   }
 }
 
@@ -2076,6 +2136,8 @@ async function init(){
   if(S.started){ catchUp(); startGame(); }
   else { show("screen-title"); drawYou(); }
   setInterval(frame, 150);
+  setInterval(faceTick, 100); warmFaces();
+  for(const ev of ["pointerdown", "keydown"]) addEventListener(ev, ()=>{ lastTouch = Date.now(); }, { passive:true });
   checkVersion(); setInterval(checkVersion, 5*60*1000);
   checkNet(); renderAcctAll();
   if(note) toast(note, 5000);
