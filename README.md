@@ -33,6 +33,8 @@ Numbers can be written short (1.23M), scientific (1.23e6), engineering (45.6e6) 
 
 Hover a resource (or tap it) to see where it comes from. Every price says how long until you can afford it. Buildings buy by the one, the ten or as many as you can. Tabs light up when there's something on them you can do, and anything new wears a tag until you've seen it. Every achievement is worth +1% to everything.
 
+The clock in the top bar counts which market cycle this run is on and how long it's gone; click it for the stats tab, with every cycle you've played, time in all, and a table of past runs (time, cycles, peak network, grass, challenge) with your fastest marked.
+
 Settings can name your network, download the save as a file or load one, and put you back to just before you last touched grass. Your Milady wears the relics you find.
 
 ## Running it yourself

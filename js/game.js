@@ -38,6 +38,7 @@ const fmtRate = n => { const a = Math.abs(n);
 function fmtTime(sec){
   sec = Math.max(0, Math.round(sec));
   const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
+  if(h >= 48) return Math.floor(h/24)+"d "+(h%24)+"h";
   return h ? h+"h "+m+"m" : m ? m+"m "+s+"s" : s+"s";
 }
 const pct = x => Math.round(x*100)+"%";
@@ -55,8 +56,8 @@ function fresh(keep){
     timers:{ arrive:0, leave:0, sparkle:60, drama:180, auto:0, feed:40 },
     run:{ cult:0, start:Date.now() },
     grass:0, perks:{}, ach:{}, relics:{}, chDone:{}, challenge:null,
-    cd:{}, raids:[], wonder:0, autoJob:"poster", seenNew:{}, netName:"",
-    stats:{ clicks:0, sparkles:0, resets:0, played:0, made:{}, rituals:0, raids:0, cancels:0 },
+    cd:{}, raids:[], wonder:0, autoJob:"poster", seenNew:{}, netName:"", history:[], born:Date.now(),
+    stats:{ clicks:0, sparkles:0, resets:0, played:0, made:{}, rituals:0, raids:0, cancels:0, cycles:0 },
     you:null, settings:{ mute:false, bg:true, calm:!!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) }, log:[], started:false,
   };
   for(const r of RES){ s.res[r.id] = 0; s.seen[r.id] = 0; }
@@ -77,6 +78,8 @@ function load(){
 }
 function migrate(s){ // fill in anything a newer version added
   const base = fresh();
+  if(s.stats && s.stats.cycles==null) s.stats.cycles = Math.max(s.cycle||0, Math.floor((s.stats.played||0)/(PHASE_SECS*PHASES.length))); // older saves: a good guess from time played
+  if(s.born==null && s.stats) s.born = Date.now() - (s.stats.played||0)*1000;
   for(const k in base) if(s[k]==null) s[k] = base[k];
   for(const k of ["res","seen","b","timers","stats","settings","run"]) s[k] = Object.assign({}, base[k], s[k]);
   return s;
@@ -171,12 +174,13 @@ function tick(s, dt, live){
   s.phaseT += dt;
   const after = Math.floor(s.phaseT/PHASE_SECS);
   if(after!==before){
-    if(after % PHASES.length===0) s.cycle++;
+    if(after % PHASES.length===0){ s.cycle++; s.stats.cycles++; }
     if(live && !rule(s, "bear")){ const p = phase(s); FX.phase(p); log(p.icon+" the market turns: <b style='color:"+p.color+"'>"+p.name+"</b>. "+p.desc+"."); }
   }
 
   // miladys turn up while there's room and something to eat; they leave when there isn't
   const n = s.miladys.length;
+  if(n > (s.run.peak||0)) s.run.peak = n;
   if(n < R.housing && s.res.vibes > 0){
     s.timers.arrive += dt * (1 + (R.f.arrive||0));
     if(s.timers.arrive >= 5){ s.timers.arrive = 0; const m = newMilady(s, R); if(live){ FX.arrive(); log((m.kind==="remilio" ? "🤘" : "🌸")+" <b>"+m.name+"</b> joined "+esc(netName())+"."); } }
@@ -452,8 +456,10 @@ function touchGrass(into){
     try{ save(); localStorage.setItem(BACKUP_KEY, JSON.stringify({ t:Date.now(), save:S })); }catch(e){} // a way back, in case
     const done = Object.assign({}, S.chDone);
     if(met) done[S.challenge] = true;
+    const history = (S.history||[]).concat({ n:resets(S)+1, t:S.runT, cycles:S.cycle, peak:S.run.peak||S.miladys.length, grass:g,
+      challenge:S.challenge, beaten:!!met, end:Date.now() }).slice(-50);
     const keep = { grass:S.grass+g, perks:S.perks, ach:S.ach, you:S.you, settings:S.settings, started:true, relics:S.relics, chDone:done,
-      challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, netName:S.netName, stats:Object.assign(S.stats, { resets:S.stats.resets+1 }), log:[], nextId:S.nextId };
+      challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, netName:S.netName, history, born:S.born, stats:Object.assign(S.stats, { resets:S.stats.resets+1 }), log:[], nextId:S.nextId };
     S = fresh(keep);
     applyPerksAtStart(S);
     closeModal(); sfx.shiny(); FX.grass(); galleryKnown = null;
@@ -498,6 +504,7 @@ function holdRitual(id, card){
   else if(id==="bull"){ // to the start of this cycle's mania if it's still ahead (or under way), otherwise the next one's
     const at = Math.floor(S.phaseT/PHASE_SECS) % 4, base = Math.floor(S.phaseT/(PHASE_SECS*4)) * PHASE_SECS*4;
     S.phaseT = base + (at <= 1 ? 1 : 5) * PHASE_SECS; FX.phase(PHASES[1]);
+    if(at > 1){ S.cycle++; S.stats.cycles++; } // skipping ahead into the next cycle still counts it
   }
   sfx.shiny(); FX.buy(card, true);
   log(r.icon+" <b>"+r.name+"</b>. "+msg);
@@ -909,17 +916,40 @@ function buildGrass(body){
   if(hidden) body.appendChild(el("p", "note", hidden+" more perks open as you keep touching grass."));
   $("btn-grass").onclick = ()=>touchGrass();
 }
+const CYCLE_SECS = PHASE_SECS * PHASES.length;
+const runNo = () => resets(S) + 1;
+function dayCount(){ return Math.floor((Date.now() - (S.born||Date.now()))/86400000) + 1; }
+function clockTitle(){
+  return "run "+runNo()+" · cycle "+(S.cycle+1)+" of this run · "+fmtTime(S.runT)+" in\n"+
+    fmt(S.stats.cycles)+" market cycles and "+fmtTime(S.stats.played)+" played in all · day "+dayCount();
+}
+/* every run you've finished, newest first, and the one you're on */
+function runHistory(){
+  const h = (S.history||[]).slice().reverse(), done = h.filter(r=>!r.challenge);
+  const best = done.length ? Math.min(...done.map(r=>r.t)) : null;
+  const row = (r, now) => '<tr'+(now ? ' class="now"' : "")+'><td>'+(now ? "▶ "+r.n : r.n)+'</td><td>'+fmtTime(r.t)+(!now && r.t===best && !r.challenge ? ' <i title="your fastest">⚡</i>' : "")+'</td><td>'+r.cycles+'</td><td>'+fmt(r.peak)+'</td><td>'+(now ? (S.tech.garden ? "+"+fmt(grassGain(S)) : "–") : "+"+fmt(r.grass))+'</td><td>'+
+    (r.challenge ? (r.beaten ? "✅ " : now ? "⚖️ " : "❌ ")+byId(CHALLENGES, r.challenge).name : "")+'</td><td>'+(now ? "now" : new Date(r.end).toLocaleDateString())+'</td></tr>';
+  return '<div class="box-h">runs <span>'+(h.length ? h.length+" finished · fastest "+(best!=null ? fmtTime(best) : "none yet") : resets(S) ? "" : "this is your first")+'</span></div>'+
+    '<div class="runs-wrap"><table class="runs"><tr><th>#</th><th>time</th><th>cycles</th><th>peak</th><th>grass</th><th>challenge</th><th>ended</th></tr>'+
+    row({ n:runNo(), t:S.runT, cycles:S.cycle, peak:S.run.peak||S.miladys.length, challenge:S.challenge }, true)+h.map(r=>row(r)).join("")+'</table></div>'+
+    (resets(S) > h.length ? '<p class="note">runs from before this was kept aren\'t listed.</p>' : "");
+}
 function buildStats(body){
   const made = RES.filter(r=>S.stats.made[r.id]).map(r=>'<span>'+resIcon(r.id)+" "+r.name+'</span><b>'+fmt(S.stats.made[r.id])+'</b>').join("");
-  body.innerHTML = '<div class="stat-grid">'+
-    '<span>played</span><b>'+fmtTime(S.stats.played)+'</b>'+
-    '<span>this run</span><b>'+fmtTime(S.runT)+'</b>'+
+  body.innerHTML = '<div class="box-h">time <span>day '+dayCount()+'</span></div><div class="stat-grid">'+
+    '<span>run</span><b>'+runNo()+(S.challenge ? " · ⚖️ "+byId(CHALLENGES, S.challenge).name : "")+'</b>'+
+    '<span>this run</span><b id="st-run">'+fmtTime(S.runT)+'</b>'+
+    '<span>market cycles done this run</span><b id="st-cyc">'+S.cycle+'</b>'+
+    '<span>market cycles done in all</span><b id="st-cyc-all">'+fmt(S.stats.cycles)+'</b>'+
+    '<span>played in all</span><b id="st-played">'+fmtTime(S.stats.played)+'</b>'+
+    '<span>first logged on</span><b>'+new Date(S.born).toLocaleDateString()+'</b>'+
+    '</div>'+runHistory()+
+    '<div class="box-h">the network</div><div class="stat-grid">'+
     '<span>posts</span><b>'+fmt(S.stats.clicks)+'</b>'+
     '<span>sparkles caught</span><b>'+fmt(S.stats.sparkles)+'</b>'+
     '<span>times you touched grass</span><b>'+resets(S)+'</b>'+
     '<span>rituals held</span><b>'+fmt(S.stats.rituals||0)+'</b>'+
     '<span>raids come home</span><b>'+fmt(S.stats.raids||0)+'</b>'+
-    '<span>market cycles</span><b>'+S.cycle+'</b>'+
     made+'</div>'+
     '<div class="box-h">achievements <span>'+Object.keys(S.ach).length+" / "+ACHIEVEMENTS.length+' · each one +'+pct(ACH_EACH)+' everything · now +'+pct(Object.keys(S.ach).length*ACH_EACH)+'</span></div>'+
     '<div class="achs">'+ACHIEVEMENTS.map(a=>'<div class="ach'+(S.ach[a.id] ? " got" : "")+'"><b>'+(S.ach[a.id] ? "🏆 " : "🔒 ")+a.name+'</b><span>'+a.desc+'</span></div>').join("")+'</div>';
@@ -975,6 +1005,10 @@ function update(){
   const ph = R.phase, into = S.phaseT % PHASE_SECS;
   $("phase-name").innerHTML = ph.icon+' <b style="color:'+ph.color+'">'+ph.name+'</b>';
   $("phase-name").title = ph.desc+" · cycle "+(S.cycle+1);
+  $("clock-cyc").textContent = S.cycle+1;
+  $("clock-run").textContent = fmtTime(S.runT);
+  $("clock").title = clockTitle();
+  if($("st-run")){ $("st-run").textContent = fmtTime(S.runT); $("st-cyc").textContent = S.cycle; $("st-cyc-all").textContent = fmt(S.stats.cycles); $("st-played").textContent = fmtTime(S.stats.played); }
   $("phase-fill").style.width = (into/PHASE_SECS*100)+"%";
   $("phase-fill").style.background = ph.color;
   $("phase-left").textContent = fmtTime(PHASE_SECS-into);
@@ -1505,6 +1539,7 @@ async function init(){
   $("btn-meme").onclick = e=>memeIt(e.shiftKey ? 10 : 1);
   $("modal").addEventListener("click", e=>{ if(e.target.id==="modal") closeModal(); });
   document.querySelectorAll(".gear").forEach(b=>b.onclick = openSettings);
+  $("clock").onclick = ()=>{ commitSeen(); tab = "stats"; refresh(true); };
   document.querySelectorAll(".help").forEach(b=>b.onclick = openHelp);
   document.querySelectorAll(".mute").forEach(b=>b.onclick = ()=>{ S.settings.mute = !S.settings.mute; syncMute(); });
   document.querySelectorAll(".fs").forEach(b=>b.onclick = ()=>{

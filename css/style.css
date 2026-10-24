@@ -577,3 +577,17 @@ body.calm .new-tag{animation:none;}
 @keyframes sparkring{from{transform:scale(.6);opacity:1;}to{transform:scale(1.4);opacity:0;}}
 /* sliders */
 input[type=range]{accent-color:var(--neon);width:150px;}
+
+/* the clock: which cycle of the market this run is on, and how long the run has gone */
+.clock{display:flex;align-items:center;gap:7px;background:none;border:1px solid rgba(139,233,253,.18);border-radius:4px;padding:3px 8px;
+  font:inherit;font-size:11px;color:var(--dim);cursor:pointer;margin-right:4px;white-space:nowrap;}
+.clock b{color:var(--neon);font-weight:bold;}
+.clock:hover,.clock.ksel{border-color:var(--neon);color:#fff;}
+#clock-run{font-variant-numeric:tabular-nums;min-width:44px;text-align:right;}
+.runs-wrap{overflow-x:auto;margin-bottom:16px;}
+.runs{border-collapse:collapse;font-size:12px;width:100%;max-width:640px;white-space:nowrap;}
+.runs th{font-family:var(--label);text-transform:uppercase;letter-spacing:.15em;font-size:.6rem;color:#666;text-align:left;padding:4px 10px 4px 0;font-weight:normal;}
+.runs td{padding:4px 10px 4px 0;border-top:1px solid rgba(255,255,255,.06);font-variant-numeric:tabular-nums;}
+.runs tr.now td{color:var(--neon);}
+.runs i{font-style:normal;}
+@media (max-width:820px){ .clock{order:2;} }
