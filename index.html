@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>the network is growing · Tyler (in real life)</title>
+<meta name="description" content="A neochibi idle clicker. Post. Build the network. Touch grass.">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<link rel="canonical" href="https://clicker.tylerirl.com/">
+<!-- link previews -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://clicker.tylerirl.com/">
+<meta property="og:title" content="the network is growing">
+<meta property="og:description" content="A neochibi idle clicker. Post. Build the network. Touch grass.">
+<meta property="og:image" content="https://clicker.tylerirl.com/assets/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="the network is growing">
+<meta name="twitter:description" content="A neochibi idle clicker. Post. Build the network. Touch grass.">
+<meta name="twitter:image" content="https://clicker.tylerirl.com/assets/preview.png">
+<meta name="twitter:creator" content="@itsTylerIRL">
+<link rel="icon" href="assets/icons/icon-192.png">
+<!-- installs to a phone's home screen and opens full-screen, like an app -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="the network">
+<link rel="stylesheet" href="css/style.css?v=875a70f3f8">
+</head>
+<body>
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<div id="weather" aria-hidden="true"></div>
+<div class="corner-brackets"><div class="bottom"></div></div>
+<div id="app">
+  <!-- TITLE -->
+  <section id="screen-title" class="screen">
+    <div class="title-wrap">
+      <div class="kicker">a neochibi idle clicker</div>
+      <h1 class="game-title"><span>the network</span><br><span class="is">is growing</span></h1>
+      <div class="title-sub">post. build the network. touch grass.</div>
+      <canvas id="title-you" width="600" height="750"></canvas>
+      <div class="row"><button id="title-reroll" class="btn small">reroll her</button></div>
+      <div class="row"><button id="btn-logon" class="btn big">&gt; log on<i class="cur" aria-hidden="true">_</i></button></div>
+      <div class="title-menu">
+        <button class="help btn small">❓ how to play</button>
+        <button class="mute btn small" title="sound">🔊</button>
+      </div>
+      <div class="foot">official remilia trait assets · copyleft · not affiliated · <a href="https://tylerirl.com/">tylerirl.com</a> · <a href="https://cancel.tylerirl.com/">the cancel is coming</a></div>
+    </div>
+  </section>
+
+  <!-- THE GAME -->
+  <section id="screen-main" class="screen">
+    <header id="topbar">
+      <div class="brand">the network <b>is growing</b></div>
+      <div class="top-right">
+        <div id="phase"><span id="phase-name"></span><i class="pbar"><u id="phase-fill"></u></i><span id="phase-left"></span></div>
+        <button class="help icon-btn" title="how to play">❓</button>
+        <button class="mute icon-btn" title="sound">🔊</button>
+        <button class="gear icon-btn" title="settings">⚙️</button>
+        <button class="fs icon-btn" title="fullscreen" aria-label="fullscreen">⛶</button>
+      </div>
+    </header>
+    <div class="layout">
+      <aside class="side">
+        <div class="box" id="you-box">
+          <button id="you-wrap" aria-label="post"><canvas id="you" width="600" height="750"></canvas></button>
+          <div id="post-val" class="post-val"></div>
+          <div id="buffs" class="buffs"></div>
+          <button id="btn-meme" class="btn hidden" title="shift: 10 at once · key: m">meme it · 25 🌸 → 1 🐸</button>
+        </div>
+        <div class="box">
+          <div class="box-h">RESOURCES</div>
+          <div id="res"></div>
+          <div id="pop" class="pop hidden">
+            <span>🏠 <b id="pop-n"></b></span><span>happiness <b id="pop-h"></b></span>
+            <span id="pop-idle" class="idle"></span><span id="pop-eat" class="dim"></span>
+          </div>
+        </div>
+        <div class="box" id="log-box">
+          <div class="box-h">TIMELINE FEED</div>
+          <div id="log"></div>
+        </div>
+      </aside>
+      <main class="box main">
+        <nav id="tabs" class="seg wrap"></nav>
+        <div id="tab-body"></div>
+      </main>
+    </div>
+    <div class="hint">space posts · m makes a meme · shift-click does 10 · the game saves itself and keeps going while you're away</div>
+  </section>
+
+  <div id="modal" class="hidden"><div class="panel" id="modal-panel"></div></div>
+  <div id="toasts"></div>
+</div>
+<div id="grade" aria-hidden="true"></div>
+<canvas id="fx-canvas" aria-hidden="true"></canvas>
+<div id="phase-banner" aria-hidden="true"></div>
+<script src="js/data.js?v=875a70f3f8"></script>
+<script src="js/fx.js?v=875a70f3f8"></script>
+<script src="js/game.js?v=875a70f3f8"></script>
+</body>
+</html>
