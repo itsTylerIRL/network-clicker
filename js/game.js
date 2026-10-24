@@ -43,7 +43,7 @@ function fmtTime(sec){
 }
 const pct = x => Math.round(x*100)+"%";
 const localFile = path => (window.INLINE_FILES && window.INLINE_FILES[path]) || path; // dist.html carries its pictures inside it
-const COIN = localFile("assets/img/cult_coin.png");
+const COIN = window.INLINE_FILES ? localFile("assets/img/cult_coin.png") : "assets/img/cult_coin.png?v=2"; // v2: cut to its circle (a kept copy of the square one is passed over)
 const resIcon = id => RES_BY[id].icon==="coin" ? '<img class="coin" src="'+COIN+'" alt="$CULT">' : RES_BY[id].icon;
 
 /* ---------- state ---------- */
