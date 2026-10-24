@@ -23,7 +23,15 @@ You start alone, posting. Click your Milady and she posts, and posting makes vib
 - **Robots.** Later perks buy automation: a meme machine, grad students who research, a personal shopper for upgrades, and scripts that build out of whatever's spare (keeping back a reserve you choose, and skipping any building you tell them to). Each has an off switch on the network tab.
 - **The ending.** The new internet is seven stages (the protocol, the nodes, the mesh, the handshake, the namespace, the archive, and the new internet itself), each filled by pouring resources in: a share of what you make, and everything that would overflow. What goes in stays when you touch grass, every stage is a bonus for good, and the last one needs the cathedral standing. Turn it on and the network gathers into a globe, the story of it plays, and then you can keep posting.
 
-It saves itself in your browser and keeps going while you're away (8 hours, or 24 with a perk). Settings can export a save to move it somewhere else.
+It saves itself in your browser and keeps going while you're away (8 hours, or 24 with a perk).
+
+## Accounts and leaderboards
+
+Sign in with **RemiliaNET** or **Urbit ID** (the same sign-in as [the cancel is coming](https://cancel.tylerirl.com), on the same service) and your network lives on your account: open it on a laptop, a desktop and a phone and it's the same one. It's sent up every minute and whenever you switch away, and each device keeps a copy so it opens straight away and plays on without a connection. If another device saved since, that one wins and this one picks up from it. The first time an account signs in, the network already in that browser moves onto it; signing out puts the browser back to its own.
+
+Signed-in players are on the **boards**: fastest run to the infinite garden (challenges don't count), most grass earned, biggest network, and who turned on the new internet first.
+
+Saves can't be downloaded, pasted or loaded from a file any more, since that would let anyone put anything on the boards. The game runs in the browser, so nothing is proven, but the service holds every save against the last one it accepted: time played can't outrun the clock, counters only go up, runs have to take a plausible while and make plausible grass, and grass can't be spent that wasn't earned. A save that doesn't add up is refused and the device goes back to the last good one. Only runs started after an account was linked count on the boards.
 
 It installs as an app (or add it to your home screen) and plays offline: the page and code are kept by a service worker, and settings can keep every trait picture (about 11 MB) so new Miladys look right with no connection. An installed copy keeps them on its own. Notifications are off until you turn them on, and then only arrive while the game's in a background tab: a raid home, a ritual ready, storage full, grass to touch, a stage of the new internet done.
 
@@ -39,7 +47,7 @@ Hover a resource (or tap it) to see where it comes from. Every price says how lo
 
 The clock in the top bar counts which market cycle this run is on and how long it's gone; click it for the stats tab, with every cycle you've played, time in all, a graph of any resource (or the network's size) across the run, and every past run in a table and a bar chart, with your fastest marked.
 
-Settings can name your network, download the save as a file or load one, and put you back to just before you last touched grass. Your Milady wears the relics you find.
+Settings can name your network. Your Milady wears the relics you find.
 
 ## Running it yourself
 
@@ -50,6 +58,8 @@ python3 -m http.server
 ```
 
 `python3 build.py` bundles everything (pictures included) into one `dist.html`, and stamps `index.html`, `version.json` and `sw.js` so an open tab can tell when a new version is up and the offline copy moves to it. Run it before you push.
+
+The accounts and boards are `server/network_api.py`, a module the cancel game's service (`server/server.py` in [cancel](https://github.com/itsTylerIRL/cancel)) loads if it's beside it: copy it there with `server/net_spec.json` (perk costs, written by `build.py`), add this site to `CANCEL_ORIGINS`, and give `/api/net/` a bigger request size in nginx (a save is about 30 KB gzipped). Point the game at another service with `localStorage.network_api`.
 
 The content (resources, jobs, buildings, research, upgrades, perks, achievements) is all in `js/data.js`. The engine and the page are `js/game.js`. How it moves (the network backdrop, the market's weather, petals and confetti) is `js/fx.js`.
 

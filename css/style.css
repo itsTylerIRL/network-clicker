@@ -658,3 +658,29 @@ body.the-end .screen,body.the-end #post-fab{opacity:0;transition:opacity 2s;poin
 @keyframes endout{to{opacity:0;}}
 @keyframes endline{from{opacity:0;transform:translateY(8px);filter:blur(4px);}to{opacity:1;transform:none;filter:none;}}
 @keyframes endblink{50%{opacity:0;}}
+
+/* accounts: the same sign-ins as the cancel is coming */
+:root{--urbit:#5fa8ff;}
+.acct-row{display:flex;flex-direction:column;align-items:center;gap:8px;margin:12px 0;text-align:center;}
+.acct-row:empty{display:none;}
+#modal .acct-row,#tab-body .acct-row{padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);}
+.acct-who{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;font-size:13px;}
+.acct-btns{display:flex;gap:8px;}
+.sso{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;}
+.sso i{font-style:normal;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);}
+.sso-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;margin:0;padding:9px 18px;font-size:13px;letter-spacing:.08em;text-transform:none;min-width:164px;}
+.sso-btn img{width:20px;height:20px;border-radius:50%;}
+.sso-btn svg{color:var(--urbit);}
+.vtag{display:inline-flex;align-items:center;gap:5px;max-width:100%;text-decoration:none;white-space:nowrap;}
+.vtag b{font-weight:600;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.vtag.rm{color:var(--gold);} .vtag.rm img{width:16px;height:16px;border-radius:50%;flex:none;box-shadow:0 0 0 1px var(--gold),0 0 8px rgba(241,250,140,.4);}
+.vtag.ur{color:var(--urbit);} .vtag.ur svg{flex:none;filter:drop-shadow(0 0 4px rgba(95,168,255,.5));}
+a.vtag:hover b{text-decoration:underline;}
+
+/* the boards */
+.board-pick{margin-bottom:6px;}
+.board{width:100%;max-width:640px;border-collapse:collapse;font-size:13px;margin-bottom:10px;}
+.board td{padding:7px 10px 7px 0;border-top:1px solid rgba(255,255,255,.06);vertical-align:middle;}
+.board td.rk{width:36px;text-align:center;color:var(--dim);font-variant-numeric:tabular-nums;}
+.board td.v{text-align:right;} .board td.v b{font-variant-numeric:tabular-nums;} .board td.v span{display:block;font-size:10px;color:var(--dim);}
+.board tr.me td{background:rgba(139,233,253,.07);} .board tr.me td.rk{color:var(--neon);}

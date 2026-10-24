@@ -68,13 +68,16 @@ function fresh(keep){
   if(keep) Object.assign(s, keep);
   return s;
 }
+/* Signed out, the network lives in this browser (SAVE_KEY). Signed in, it lives on the account, and this browser keeps
+   a copy of it under the account's id so it opens instantly and plays on with no connection. */
+const slotKey = () => acct() ? SAVE_KEY+":"+acct().player : SAVE_KEY;
 function save(){
   if(!S) return;
-  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){}
+  try{ localStorage.setItem(slotKey(), JSON.stringify(S)); }catch(e){}
 }
 function load(){
   try{
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(slotKey());
     if(raw) return migrate(JSON.parse(raw));
   }catch(e){}
   return null;
@@ -549,7 +552,6 @@ function touchGrass(into){
     (ch ? '<p class="unlock-note">⚖️ the next run is a challenge: <b>'+ch.name+'</b>. '+ch.rule+'</p>' : "")+
     '<div class="row"><button class="btn big" id="grass-yes">touch grass 🌿</button><button class="btn small" data-close>not yet</button></div>');
   $("grass-yes").onclick = ()=>{
-    try{ save(); localStorage.setItem(BACKUP_KEY, JSON.stringify({ t:Date.now(), save:S })); }catch(e){} // a way back, in case
     const done = Object.assign({}, S.chDone);
     if(met) done[S.challenge] = true;
     const history = (S.history||[]).concat({ n:resets(S)+1, t:S.runT, cycles:S.cycle, peak:S.run.peak||S.miladys.length, grass:g,
@@ -565,6 +567,7 @@ function touchGrass(into){
     if(met) log("✅ challenge beaten: <b>"+cur.name+"</b>. "+cur.rdesc+".");
     if(ch) log("⚖️ challenge: <b>"+ch.name+"</b>. "+ch.rule);
     tab = "network"; refresh(true);
+    setTimeout(()=>syncUp(), 1000); // a new run is worth keeping straight away
   };
 }
 function applyPerksAtStart(s){
@@ -717,6 +720,7 @@ function tabs(){
   if(nnOpen(S)) t.push({ id:"newnet", name:"internet" });
   if(S.tech.garden || S.grass>0 || resets(S)>0) t.push({ id:"grass", name:"grass" });
   t.push({ id:"stats", name:"stats" });
+  if(online()) t.push({ id:"boards", name:"boards" });
   return t;
 }
 let tab = "network", sig = "";
@@ -787,7 +791,7 @@ function build(){
   }
   if(S.challenge){ const c = byId(CHALLENGES, S.challenge); body.appendChild(el("div", "challenge-bar", "⚖️ challenge: <b>"+c.name+"</b>. "+c.rule+(c.id==="speed" ? ' <span id="speed-left"></span>' : ""))); }
   ({ network:buildNetwork, miladys:buildMiladys, lore:buildLore, upgrades:buildUpgrades, rituals:buildRituals,
-     raids:buildRaids, cathedral:buildCathedral, newnet:buildNewnet, grass:buildGrass }[tab] || buildStats)(body);
+     raids:buildRaids, cathedral:buildCathedral, newnet:buildNewnet, grass:buildGrass, boards:buildBoards }[tab] || buildStats)(body);
   tagNew(body);
 }
 /* "new!": anything you haven't seen before wears a tag until you've been to its tab and left again (or bought it).
@@ -1452,6 +1456,7 @@ function closeModal(){ $("modal").classList.add("hidden"); if(navSel && !documen
 
 function openSettings(){
   openModal('<h2>settings</h2>'+
+    '<div class="acct-row" id="acct-set"></div>'+
     '<div class="set-row"><span>sound</span><button class="tog'+(S.settings.mute ? "" : " on")+'" id="set-mute">'+(S.settings.mute ? "off" : "on")+'</button></div>'+
     '<div class="set-row"><span>animated backdrop</span><button class="tog'+(S.settings.bg!==false ? " on" : "")+'" id="set-bg">'+(S.settings.bg!==false ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>calm (less motion)</span><button class="tog'+(S.settings.calm ? " on" : "")+'" id="set-calm">'+(S.settings.calm ? "on" : "off")+'</button></div>'+
@@ -1464,13 +1469,8 @@ function openSettings(){
     (S.settings.notifyOn ? '<div class="set-row notify-kinds">'+Object.keys(NOTIFY_WHAT).map(k=>'<button class="tog'+(S.settings.notify[k] ? " on" : "")+'" data-notify="'+k+'">'+NOTIFY_WHAT[k]+'</button>').join("")+'</div>' : "")+
     (standalone() ? "" : '<div class="set-row"><span>install it as an app</span>'+(installPrompt ? '<button class="btn small" id="set-install">install</button>' : '<span class="note">'+(/iphone|ipad/i.test(navigator.userAgent) ? "in safari: share → add to home screen" : "use your browser's install button")+'</span>')+'</div>')+
     (window.caches && !window.INLINE_FILES ? '<div class="set-row"><span>keep every picture, to play offline (about 11 MB)</span><button class="btn small" id="set-offline">'+(offlineState==="done" ? "kept ✓" : offlineState==="busy" ? "keeping…" : "keep them")+'</button></div>' : "")+
-    '<div class="set-row"><span>save file</span><span><button class="btn small" id="set-download">download</button> <button class="btn small" id="set-upload">load a file</button></span></div>'+
-    '<input id="save-file" type="file" accept=".json,application/json" class="hidden">'+
-    '<div class="set-row"><span>save as text</span><span><button class="btn small" id="set-export">copy</button> <button class="btn small" id="set-import">paste</button></span></div>'+
-    '<textarea id="save-box" class="save-box hidden" spellcheck="false"></textarea>'+
-    (backup() ? '<div class="set-row"><span>from before you last touched grass ('+new Date(backup().t).toLocaleString()+')</span><button class="btn small" id="set-restore">restore it</button></div>' : "")+
-    '<div class="set-row"><span>start over, for real</span><button class="btn small danger" id="set-wipe">wipe save</button></div>'+
-    '<p class="note">the game saves itself every few seconds, in this browser. export it to move it somewhere else.</p>'+
+    (acct() ? "" : '<div class="set-row"><span>start over, for real</span><button class="btn small danger" id="set-wipe">wipe this device</button></div>')+
+    '<p class="note">'+(acct() ? "your network is kept on your account, and saved there every minute. sign in anywhere to pick it up." : "the game saves itself every few seconds, in this browser. sign in to keep it on your account and play it on any device.")+'</p>'+
     '<div class="row"><button class="btn small" data-close>close</button></div>');
   $("set-mute").onclick = ()=>{ S.settings.mute = !S.settings.mute; syncMute(); openSettings(); };
   $("set-bg").onclick = ()=>{ S.settings.bg = S.settings.bg===false; syncLook(); openSettings(); };
@@ -1485,46 +1485,12 @@ function openSettings(){
   document.querySelectorAll("#modal [data-notify]").forEach(b=>b.onclick = ()=>{ const k = b.dataset.notify; S.settings.notify[k] = !S.settings.notify[k]; openSettings(); });
   if($("set-install")) $("set-install").onclick = async ()=>{ installPrompt.prompt(); await installPrompt.userChoice.catch(()=>{}); installPrompt = null; openSettings(); };
   if($("set-offline")) $("set-offline").onclick = ()=>keepOffline(false);
-  $("set-download").onclick = ()=>{
-    save();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type:"application/json" }));
-    a.download = "network-"+new Date().toISOString().slice(0,10)+".json"; a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
-  };
-  $("set-upload").onclick = ()=>$("save-file").click();
-  $("save-file").onchange = e=>{
-    const file = e.target.files[0]; if(!file) return;
-    file.text().then(t=>loadSave(JSON.parse(t))).catch(()=>toast("that file didn't read"));
-  };
-  if($("set-restore")) $("set-restore").onclick = ()=>{
-    openModal('<h2>go back?</h2><p>back to just before you last touched grass ('+new Date(backup().t).toLocaleString()+'). everything since then goes.</p><div class="row"><button class="btn danger" id="restore-yes">go back</button><button class="btn small" data-close>no</button></div>');
-    $("restore-yes").onclick = ()=>loadSave(backup().save);
-  };
-  $("set-export").onclick = ()=>{
-    save();
-    const box = $("save-box"); box.classList.remove("hidden");
-    box.value = btoa(unescape(encodeURIComponent(JSON.stringify(S)))); box.select();
-    try{ navigator.clipboard.writeText(box.value); toast("save copied"); }catch(e){}
-  };
-  $("set-import").onclick = ()=>{
-    const box = $("save-box");
-    if(box.classList.contains("hidden") || !box.value.trim()){ box.classList.remove("hidden"); box.value = ""; box.placeholder = "paste a save here, then press import again"; box.focus(); return; }
-    try{ loadSave(JSON.parse(decodeURIComponent(escape(atob(box.value.trim()))))); }
-    catch(e){ toast("that save didn't read"); }
-  };
-  $("set-wipe").onclick = ()=>{
+  renderAcct($("acct-set"));
+  if($("set-wipe")) $("set-wipe").onclick = ()=>{
     openModal('<h2>wipe everything?</h2><p>grass, perks, achievements, all of it. there\'s no undo.</p><div class="row"><button class="btn danger" id="wipe-yes">wipe it</button><button class="btn small" data-close>no</button></div>');
     $("wipe-yes").onclick = ()=>{ localStorage.removeItem(SAVE_KEY); S = null; location.reload(); };
   };
 }
-function loadSave(data){
-  if(!data || !data.res || !data.miladys) return toast("that isn't a save");
-  S = migrate(data); S.started = true; S.last = Date.now();
-  save(); closeModal(); galleryKnown = null; drawYou(); syncName(); refresh(true); renderLog(); toast("save loaded");
-}
-const BACKUP_KEY = "network-backup-v1";
-function backup(){ try{ return JSON.parse(localStorage.getItem(BACKUP_KEY)); }catch(e){ return null; } }
 function syncName(){
   document.querySelectorAll(".brand").forEach(b=>b.innerHTML = (S.netName ? esc(S.netName) : "the network")+" <b>"+(S.ended ? "is online" : "is growing")+"</b>");
   setTitle();
@@ -1817,6 +1783,183 @@ async function askNotify(){
   openSettings();
 }
 
+/* ---------- accounts: sign in with RemiliaNET or Urbit ID, and the network follows you ----------
+   The same service and the same sign-in as the cancel game. The account holds the save: this browser keeps a copy
+   to open instantly and play on without a connection, and sends it back every minute. The service holds each save
+   against the last one it took, so there's no loading a save from a file or a paste any more: that would let anyone
+   put anything on the boards. */
+const API_DEFAULT = "https://cancel-api.tylerirl.com";
+const apiBase = () => { try{ return localStorage.getItem("network_api") || API_DEFAULT; }catch(e){ return API_DEFAULT; } };
+const online = () => /^https?:$/.test(location.protocol) && !window.INLINE_FILES; // dist.html, opened as a file, has no origin the service takes
+const SESSION_KEY = "network-session", SYNC_KEY = "network-sync";
+const lsGet = k => { try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } };
+const lsSet = (k, v) => { try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+function acct(){ const a = lsGet(SESSION_KEY); return a && a.exp*1000 > Date.now() ? a : null; }
+const syncMeta = () => (acct() && (lsGet(SYNC_KEY) || {})[acct().player]) || { rev:0 };
+function setSyncMeta(m){ const all = lsGet(SYNC_KEY) || {}; all[acct().player] = Object.assign({}, syncMeta(), m); lsSet(SYNC_KEY, all); }
+let netOn = null, syncing = false, syncState = "", syncAt = 0, netRanks = {};
+
+async function api(path, body, o){ // {status, data}; status 0 when the service couldn't be reached
+  if(!online()) return { status:0 };
+  o = o || {};
+  const ctl = new AbortController(), t = setTimeout(()=>ctl.abort(), o.ms || 10000);
+  try{
+    const r = await fetch(apiBase()+path, body ? { method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify(body), signal:ctl.signal, keepalive:!!o.keepalive } : { signal:ctl.signal });
+    let data = null; try{ data = await r.json(); }catch(e){}
+    return { status:r.status, data };
+  }catch(e){ return { status:0 }; }finally{ clearTimeout(t); }
+}
+/* a save is about 200 KB of JSON and a tenth of that gzipped */
+async function gz(text){
+  if(!window.CompressionStream) return null;
+  const b = new Uint8Array(await new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+  let bin = ""; for(let i=0; i<b.length; i+=0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i+0x8000));
+  return btoa(bin);
+}
+async function gunzip(b64){
+  const bytes = Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
+  return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+}
+function authReturn(){ // back from signing in: the service put its own signed session in the address's #fragment
+  const m = /[#&]rn(_error)?=([^&]*)/.exec(location.hash); if(!m) return null;
+  try{ history.replaceState(null, "", location.pathname+location.search); }catch(e){}
+  if(m[1]) return { error:"sign-in didn't go through ("+decodeURIComponent(m[2])+")" };
+  try{
+    const d = JSON.parse(decodeURIComponent(escape(atob(m[2].split(".")[0].replace(/-/g,"+").replace(/_/g,"/")))));
+    lsSet(SESSION_KEY, { token:m[2], handle:String(d.h), name:String(d.n||d.h), player:String(d.p), exp:+d.exp });
+    return { fresh:true };
+  }catch(e){ return { error:"sign-in didn't go through" }; }
+}
+/* on opening the game signed in: the account's save, if it's newer than the copy here */
+async function pullAccount(){
+  const r = await api("/api/net/load", { session:acct().token }, { ms:6000 });
+  if(r.status===401){ lsSet(SESSION_KEY, null); S = load(); return "your sign-in ran out. sign in again to keep syncing."; }
+  if(r.status!==200){ syncState = "offline: it'll sync when it can"; return ""; }
+  netRanks = r.data.ranks || {};
+  if(r.data.gz){
+    if(!S || r.data.rev !== syncMeta().rev){ S = migrate(JSON.parse(await gunzip(r.data.gz))); setSyncMeta({ rev:r.data.rev }); save(); }
+    syncState = "synced"; syncAt = Date.now();
+  } else if(!S){ // a new account: this browser's network joins it. Moved, not copied, so signing out here starts afresh
+    const mine = lsGet(SAVE_KEY);
+    S = mine ? migrate(mine) : fresh();
+    setSyncMeta({ rev:0 }); save(); lsSet(SAVE_KEY, null);
+    if(mine) return "this device's network is on your account now.";
+  }
+  return "";
+}
+async function syncUp(leaving){
+  const a = acct(); if(!a || !S || !S.started || syncing || !online()) return;
+  syncing = true;
+  try{
+    save();
+    const text = JSON.stringify(S), packed = await gz(text);
+    const r = await api("/api/net/save", Object.assign({ session:a.token, rev:syncMeta().rev }, packed ? { gz:packed } : { json:JSON.parse(text) }), { keepalive:leaving });
+    if(r.status===200){ setSyncMeta({ rev:r.data.rev }); syncAt = Date.now(); syncState = "synced"; netRanks = r.data.ranks || netRanks; }
+    else if((r.status===409 || r.status===422) && r.data) await adopt(r.data, r.status===409
+      ? "picked up where your other device left off."
+      : "your account didn't take the last change ("+esc(r.data.error||"")+"), so it's back to the last good save.");
+    else if(r.status===401){ toast("your sign-in ran out. sign in again to keep syncing."); signOut(); }
+    else syncState = r.status ? "the service said no ("+r.status+")" : "offline: it'll sync when it can";
+  }catch(e){ syncState = "couldn't sync"; }
+  finally{ syncing = false; renderAcctAll(); }
+}
+/* the account's copy wins: another device saved since, or the service wouldn't take this one */
+async function adopt(d, msg){
+  if(!d.gz){ setSyncMeta({ rev:d.rev||0 }); return; } // the account has nothing: the next sync is its first
+  S = migrate(JSON.parse(await gunzip(d.gz))); setSyncMeta({ rev:d.rev }); save();
+  awaySnap = null; galleryKnown = null; watchPrev = null; wornNow = "";
+  closeModal(); syncLook(); syncName(); syncMute(); renderLog(); drawYou();
+  if(S.started){ catchUp(false); startGame(); } else show("screen-title");
+  syncState = "synced"; syncAt = Date.now();
+  toast("🔄 "+msg, 5000);
+}
+function signIn(kind){
+  save();
+  location.assign(apiBase()+(kind==="ur" ? "/api/auth/urbit/login" : "/api/auth/login")+"?return="+encodeURIComponent(location.origin+location.pathname));
+}
+async function signOut(){
+  if(acct()){ await syncUp(); save(); }
+  S = null; // nothing more gets saved on the way out, or it would land in this browser's own slot
+  lsSet(SESSION_KEY, null);
+  location.reload(); // and this browser's own network comes back
+}
+const isShip = h => typeof h==="string" && h[0]==="~";
+const URBIT_MARK = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6.4 13.4c1.2-2.6 2.9-3.3 4.6-2.1l2 1.4c1.7 1.2 3.4.5 4.6-2.1" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
+const REMILIA_LOGO = "assets/img/remilia_logo.webp";
+/* a verified name: a RemiliaNET account in gold, an Urbit ship in blue */
+const whoTag = h => isShip(h) ? '<span class="vtag ur" title="verified Urbit ship">'+URBIT_MARK+'<b>'+esc(h)+'</b></span>'
+  : '<a class="vtag rm" href="https://remilia.net/~'+encodeURIComponent(h)+'" target="_blank" rel="noopener" title="verified RemiliaNET account"><img src="'+localFile(REMILIA_LOGO)+'" alt=""><b>~'+esc(h)+'</b></a>';
+async function checkNet(){
+  if(netOn!==null || !online()) return;
+  const r = await api("/api/net/health", null, { ms:6000 });
+  netOn = r.status===200 && r.data ? { rn:!!r.data.rn, ur:!!r.data.ur } : { rn:false, ur:false, down:true };
+  renderAcctAll();
+}
+function renderAcct(box){
+  if(!box) return;
+  if(!online()){ box.innerHTML = ""; return; }
+  const a = acct();
+  if(a){
+    const ago = syncAt ? Math.round((Date.now()-syncAt)/1000) : null;
+    box.innerHTML = '<span class="acct-who">✓ signed in as '+whoTag(a.handle)+'</span>'+
+      '<span class="note">'+(syncState==="synced" && ago!=null ? "synced "+(ago < 5 ? "just now" : fmtTime(ago)+" ago") : esc(syncState || "syncing…"))+'</span>'+
+      '<span class="acct-btns"><button class="btn small acct-sync">sync now</button><button class="btn small acct-out">sign out</button></span>';
+    box.querySelector(".acct-sync").onclick = ()=>syncUp();
+    box.querySelector(".acct-out").onclick = ()=>{
+      openModal('<h2>sign out?</h2><p>your network stays on your account. this device goes back to its own.</p><div class="row"><button class="btn" id="out-yes">sign out</button><button class="btn small" data-close>no</button></div>');
+      $("out-yes").onclick = ()=>signOut();
+    };
+    return;
+  }
+  if(!netOn || netOn.down || !(netOn.rn || netOn.ur)){ box.innerHTML = netOn && netOn.down ? '<span class="note">accounts can\'t be reached right now.</span>' : ""; return; }
+  box.innerHTML = '<div class="sso">'+(netOn.rn ? '<button class="btn sso-btn" data-sso="rn"><img src="'+localFile(REMILIA_LOGO)+'" alt="">Remilia SSO</button>' : "")+
+    (netOn.rn && netOn.ur ? "<i>or</i>" : "")+(netOn.ur ? '<button class="btn sso-btn" data-sso="ur">'+URBIT_MARK+'Urbit ID</button>' : "")+'</div>'+
+    '<span class="note">sign in to play your network on any device and get on the leaderboards. the same sign-in as the cancel is coming.</span>';
+  box.querySelectorAll("[data-sso]").forEach(b=>b.onclick = ()=>signIn(b.dataset.sso));
+}
+function renderAcctAll(){ renderAcct($("acct-title")); renderAcct($("acct-set")); renderAcct($("acct-boards")); }
+
+/* ---------- the boards ---------- */
+const BOARD_INFO = {
+  fastest: ["⚡ fastest run", "quickest to the infinite garden. challenge runs don't count"],
+  grass:   ["🌿 most grass", "grass earned while signed in"],
+  network: ["🌸 biggest network", "the most miladys at once in one run"],
+  online:  ["🌐 first online", "who turned on the new internet first"],
+};
+let boardKey = "fastest";
+const boardCache = {};
+function boardValue(b, r){
+  const d = r.detail || {};
+  if(b==="fastest") return ['<b>'+fmtTime(r.value)+'</b>', "run "+d.n+" · "+d.cycles+" cycles · peak "+fmt(d.peak)];
+  if(b==="grass") return ['<b>'+fmt(r.value)+' 🌿</b>', d.runs+" runs"];
+  if(b==="network") return ['<b>'+fmt(r.value)+' miladys</b>', "run "+d.n];
+  return ['<b>'+new Date(r.value*1000).toLocaleDateString()+'</b>', "day "+d.days+" · run "+d.runs];
+}
+function buildBoards(body){
+  body.innerHTML = '<div class="board-pick seg wrap">'+Object.keys(BOARD_INFO).map(k=>'<button class="pick'+(k===boardKey ? " on" : "")+'" data-board="'+k+'">'+BOARD_INFO[k][0]+'</button>').join("")+'</div>'+
+    '<p class="note" id="board-what">'+BOARD_INFO[boardKey][1]+'.</p><div id="board-list"><p class="note">loading…</p></div>'+
+    '<div class="acct-row" id="acct-boards"></div>'+
+    '<p class="note">only verified players are on the boards, and only runs started after signing in count. the game runs on your device, so the service checks every save against the last one it took: time can\'t go faster than it does, and everything has to add up.</p>';
+  body.querySelectorAll("[data-board]").forEach(b=>b.onclick = ()=>{ boardKey = b.dataset.board; refresh(true); });
+  renderAcct($("acct-boards"));
+  loadBoard();
+}
+async function loadBoard(){
+  const k = boardKey, c = boardCache[k];
+  if(c && Date.now()-c.at < 30000) return drawBoard(k, c.data);
+  const r = await api("/api/net/board?b="+k+"&limit=50"+(acct() ? "&player="+acct().player : ""));
+  if(r.status!==200){ if($("board-list") && boardKey===k) $("board-list").innerHTML = '<p class="note">the boards can\'t be reached right now.</p>'; return; }
+  boardCache[k] = { at:Date.now(), data:r.data };
+  drawBoard(k, r.data);
+}
+function drawBoard(k, d){
+  const box = $("board-list"); if(!box || boardKey!==k) return;
+  if(!d.rows.length){ box.innerHTML = '<p class="note">nobody yet. it could be you.</p>'; return; }
+  const row = (r, rank) => { const [v, sub] = boardValue(k, r); return '<tr'+(r.me ? ' class="me"' : "")+'><td class="rk">'+(rank<=3 ? ["🥇","🥈","🥉"][rank-1] : rank)+'</td><td>'+whoTag(r.handle)+'</td><td class="v">'+v+'<span>'+sub+'</span></td></tr>'; };
+  box.innerHTML = '<table class="board">'+d.rows.map(r=>row(r, r.rank)).join("")+'</table>'+
+    (d.me && !d.rows.some(r=>r.me) ? '<p class="note">you\'re #'+d.me.rank+' of '+d.total+'.</p>' : d.total > d.rows.length ? '<p class="note">'+d.total+' on this board.</p>' : "");
+}
+
 /* ---------- the app: installs, and plays offline ---------- */
 let installPrompt = null;
 const standalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone===true;
@@ -1885,7 +2028,11 @@ function showEnding(){
 
 async function init(){
   try{ await loadAssets(); }catch(e){ console.warn("assets", e); }
+  try{ localStorage.removeItem("network-backup-v1"); }catch(e){} // the old "go back to before you touched grass": gone with accounts
+  const ret = online() ? authReturn() : null;
   S = load();
+  let note = ret && ret.error ? esc(ret.error) : ret && ret.fresh ? "✓ signed in as "+(isShip(acct().handle) ? "" : "~")+esc(acct().handle)+"." : "";
+  if(acct() && online()){ const m = await pullAccount(); if(m) note = (note ? note+" " : "")+m; }
   if(!S){ S = fresh(); }
   if(!S.seenInit){ R = rates(S); markAllSeen(); S.seenInit = true; }
   syncLook(); syncName(); FX.start();
@@ -1908,7 +2055,7 @@ async function init(){
   $("title-reroll").onclick = ()=>{ S.you = rollLook(); drawYou(); const c = $("title-you"); c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop"); };
   $("btn-logon").onclick = ()=>{ S.started = true; S.last = Date.now(); save(); startGame(); };
   document.addEventListener("keydown", onKey);
-  document.addEventListener("visibilitychange", ()=>{ if(document.hidden) save(); else { raidBack = false; if(S.started && awaySnap){ catchUp(false); refresh(true); } frame(); setTitle(); } });
+  document.addEventListener("visibilitychange", ()=>{ if(document.hidden){ save(); syncUp(true); } else { raidBack = false; if(S.started && awaySnap){ catchUp(false); refresh(true); } frame(); setTitle(); } });
   registerSW();
   window.addEventListener("pagehide", save);
   document.querySelectorAll('a[href*="cancel.tylerirl.com"]').forEach(a=>a.addEventListener("click", save)); // off to the other game: save on the way out
@@ -1917,5 +2064,8 @@ async function init(){
   else { show("screen-title"); drawYou(); }
   setInterval(frame, 150);
   checkVersion(); setInterval(checkVersion, 5*60*1000);
+  checkNet(); renderAcctAll();
+  if(note) toast(note, 5000);
+  if(acct()){ setTimeout(()=>syncUp(), 3000); setInterval(()=>syncUp(), 60*1000); setInterval(renderAcctAll, 15*1000); }
 }
 init();

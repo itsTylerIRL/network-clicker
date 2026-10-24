@@ -63,4 +63,11 @@ for icon in ("assets/icons/favicon-32.png", "assets/icons/icon-192.png"):
     html = swap(html, 'href="%s"' % icon, 'href="%s"' % data_uri(icon))
 
 (ROOT / "dist.html").write_text(html, "utf8")
+
+# the service checks grass spent on perks against grass earned, so it needs to know what each perk costs
+data_js = (ROOT / "js/data.js").read_text("utf8")
+perks_src = data_js[data_js.index("const PERKS = ["):]
+perks_src = perks_src[:perks_src.index("];")]
+perks = {m.group(1): int(m.group(2)) for m in re.finditer(r'\{ id:"(\w+)",[^\n]*?cost:(\d+)', perks_src)}
+(ROOT / "server/net_spec.json").write_text(json.dumps({"perks": perks}, indent=1) + "\n", "utf8")
 print("dist.html: %.1f MB, %d inlined assets, version %s" % (len(html.encode()) / 1e6, len(files), stamp))

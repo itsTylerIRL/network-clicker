@@ -1,0 +1,26 @@
+{
+ "perks": {
+  "headstart": 2,
+  "muscle": 2,
+  "sleep": 3,
+  "wellness": 4,
+  "golden": 4,
+  "landlord": 5,
+  "scholar": 6,
+  "memory": 8,
+  "overclock": 5,
+  "devops": 6,
+  "autopilot": 10,
+  "faithful": 8,
+  "blessing": 6,
+  "scout": 6,
+  "treasure": 8,
+  "architect": 10,
+  "roots": 15,
+  "photo": 12,
+  "automeme": 8,
+  "autotech": 12,
+  "autobuild": 15,
+  "autoup": 12
+ }
+}
