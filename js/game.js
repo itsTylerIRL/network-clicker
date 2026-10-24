@@ -174,7 +174,10 @@ function rates(s){
   if(rule(s, "small")) housing = Math.min(housing, 25);
   const perPost = rule(s, "logoff") ? 0 : (1 + (f.click||0)) * (1 + (f.clickMult||0)) * (1 + buff(s, "click")) * grassMult;
   const click = perPost ? perPost + (f.clickRate||0) * Math.max(0, prod.vibes) : 0;
-  return { f, jobs, happy, prod, cap, net, eat, housing, click, autoclick:f.autoclick||0, phase:ph, grassMult };
+  // your posting bots are part of the vibes coming in (they post even on a logged-off run: it's you who can't)
+  const autoclick = f.autoclick||0, bots = autoclick * (rule(s, "logoff") ? (1 + (f.click||0)) * grassMult : click);
+  net.vibes += bots;
+  return { f, jobs, happy, prod, cap, net, eat, housing, click, autoclick, bots, phase:ph, grassMult };
 }
 
 function gain(s, id, amt, cap){
@@ -192,12 +195,7 @@ function gain(s, id, amt, cap){
 function tick(s, dt, live){
   const R = rates(s);
   s.t += dt; s.runT += dt; s.stats.played += dt;
-  for(const r of RES) gain(s, r.id, R.net[r.id]*dt, R.cap[r.id]);
-  // your posting bots (they post even on a logged-off run: it's you who can't)
-  if(R.autoclick){
-    const per = rule(s, "logoff") ? (1 + (R.f.click||0)) * R.grassMult : R.click;
-    gain(s, "vibes", per*R.autoclick*dt, R.cap.vibes);
-  }
+  for(const r of RES) gain(s, r.id, R.net[r.id]*dt, R.cap[r.id]); // (vibes' net has your posting bots in it)
 
   // the market
   const before = Math.floor(s.phaseT/PHASE_SECS);
@@ -244,7 +242,7 @@ function nnReqMet(s, st){
 /* how fast a resource is going in: a share of what you make, and all of it while storage is full (it'd be lost) */
 function pourRate(s, R, k){
   const full = s.res[k] >= R.cap[k] - 1e-6;
-  return Math.max(0, R.net[k] + (k==="vibes" ? R.click*R.autoclick : 0)) * (full ? 1 : s.nn.share);
+  return Math.max(0, R.net[k]) * (full ? 1 : s.nn.share);
 }
 function pour(s, R, dt, live){
   if(!nnOpen(s) || s.ended) return;
@@ -829,7 +827,7 @@ function eta(c){
     const need = c[k] - S.res[k];
     if(need <= 1e-9) continue;
     if(c[k] > R.cap[k]+1e-9) return "";
-    const rate = R.net[k] + (k==="vibes" ? R.click*R.autoclick : 0);
+    const rate = R.net[k];
     if(rate <= 1e-9) return "⏳ not at this rate";
     worst = Math.max(worst, need/rate);
   }
@@ -1481,9 +1479,9 @@ function breakdown(id){
     html += '<tr class="sum"><td>made</td><td>'+fmtRate(R.prod[id])+'</td></tr>';
   }
   if(id==="vibes"){
-    if(R.autoclick) html += '<tr><td>your posting bots</td><td>'+fmtRate(R.click*R.autoclick)+'</td></tr>';
+    if(R.bots) html += '<tr><td>your posting bots ('+R.autoclick+'/s)</td><td>'+fmtRate(R.bots)+'</td></tr>';
     if(R.eat) html += '<tr class="neg"><td>'+(S.miladys.length-R.jobs.away)+' miladys eating</td><td>'+fmtRate(-R.eat)+'</td></tr>';
-    html += '<tr class="sum"><td>all told</td><td>'+fmtRate(R.net.vibes + R.click*R.autoclick)+'</td></tr>';
+    html += '<tr class="sum"><td>all told</td><td>'+fmtRate(R.net.vibes)+'</td></tr>';
   }
   html += '</table><div class="tip-d">room for '+fmt(R.cap[id])+(S.res[id] < R.cap[id] && R.net[id] > 0 ? " · full in "+fmtTime((R.cap[id]-S.res[id])/R.net[id]) : S.res[id] >= R.cap[id]-1e-6 ? " · full" : "")+'</div>';
   return html;
