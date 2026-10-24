@@ -55,7 +55,7 @@ function fresh(keep){
     timers:{ arrive:0, leave:0, sparkle:60, drama:180, auto:0, feed:40 },
     run:{ cult:0, start:Date.now() },
     grass:0, perks:{}, ach:{}, relics:{}, chDone:{}, challenge:null,
-    cd:{}, raids:[], wonder:0, autoJob:"poster",
+    cd:{}, raids:[], wonder:0, autoJob:"poster", seenNew:{}, netName:"",
     stats:{ clicks:0, sparkles:0, resets:0, played:0, made:{}, rituals:0, raids:0, cancels:0 },
     you:null, settings:{ mute:false, bg:true, calm:!!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) }, log:[], started:false,
   };
@@ -82,7 +82,11 @@ function migrate(s){ // fill in anything a newer version added
   return s;
 }
 
+const netName = () => (S && S.netName) || "the network";
+const esc = t => String(t).replace(/[&<>"]/g, c=>({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c]);
+
 /* ---------- the rules ---------- */
+const ACH_EACH = 0.01;
 const resets = s => s.stats.resets || 0;
 const opened = (s, x) => resets(s) >= (x.ng||0); // has this layer opened yet
 const rule = (s, id) => s.challenge===id; // a challenge run bends one rule
@@ -108,6 +112,7 @@ function sumFx(s){
   for(const r of RELICS) if(s.relics[r.id]) add(r.fx, s.relics[r.id]);
   for(let i=0; i<(s.wonder||0); i++) add(WONDER[i].fx, 1);
   for(const c of CHALLENGES) if(s.chDone[c.id]) add(c.reward, 1);
+  f.all = (f.all||0) + Object.keys(s.ach).length * ACH_EACH; // every achievement is worth a little
   return f;
 }
 const buff = (s, key) => s.buffs.reduce((a,b)=>a + (b[key]||0), 0);
@@ -174,7 +179,7 @@ function tick(s, dt, live){
   const n = s.miladys.length;
   if(n < R.housing && s.res.vibes > 0){
     s.timers.arrive += dt * (1 + (R.f.arrive||0));
-    if(s.timers.arrive >= 5){ s.timers.arrive = 0; const m = newMilady(s, R); if(live){ FX.arrive(); log((m.kind==="remilio" ? "🤘" : "🌸")+" <b>"+m.name+"</b> joined the network."); } }
+    if(s.timers.arrive >= 5){ s.timers.arrive = 0; const m = newMilady(s, R); if(live){ FX.arrive(); log((m.kind==="remilio" ? "🤘" : "🌸")+" <b>"+m.name+"</b> joined "+esc(netName())+"."); } }
   } else s.timers.arrive = 0;
   if((s.res.vibes <= 0 && R.net.vibes < 0) || n > R.housing){
     s.timers.leave += dt;
@@ -300,16 +305,21 @@ function thumb(look, kind){
 let AC = null;
 function blip(freq, len, type, vol){
   if(S && S.settings.mute) return;
+  vol = (vol||0.04) * (S && S.settings.vol!=null ? S.settings.vol : 70)/70; // the effects volume, out of 100 (70 is how it always was)
+  if(vol <= 0) return;
   try{
     AC = AC || new (window.AudioContext||window.webkitAudioContext)();
     const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
     o.type = type||"square"; o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(freq*1.5, t+len);
-    g.gain.setValueAtTime(vol||0.04, t); g.gain.exponentialRampToValueAtTime(0.0001, t+len);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t+len);
     o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+len);
   }catch(e){}
 }
+/* a post is a note from a five-note scale, rooted where the market is: bright in mania, low in a bear market */
+const POST_ROOT = { accum:523, mania:659, dist:587, bear:440 }, PENTA = [1, 9/8, 5/4, 3/2, 5/3];
 const sfx = {
-  post: ()=>blip(520+rnd()*120, 0.06, "square", 0.025),
+  post: ()=>blip((POST_ROOT[S && R ? R.phase.id : "accum"]||523) * choice(PENTA), 0.06, "square", 0.025),
+  chime:()=>{ [1568,2093].forEach((f,i)=>setTimeout(()=>blip(f, 0.18, "sine", 0.035), i*90)); },
   buy:  ()=>{ blip(660, 0.08, "triangle", 0.06); setTimeout(()=>blip(990, 0.1, "triangle", 0.05), 60); },
   no:   ()=>blip(140, 0.12, "sawtooth", 0.03),
   shiny:()=>{ [880,1175,1568].forEach((f,i)=>setTimeout(()=>blip(f, 0.12, "sine", 0.06), i*70)); },
@@ -339,9 +349,17 @@ function post(e){
   const got = gain(S, "vibes", R.click, R.cap.vibes);
   S.stats.clicks++;
   sfx.post();
+  if(POST_MILESTONES.includes(S.stats.clicks)) celebrate(S.stats.clicks);
   const you = $("you-wrap");
   you.classList.remove("boop"); void you.offsetWidth; you.classList.add("boop");
   if(e && e.clientX!=null){ floatText(e.clientX, e.clientY, got>0 ? "+"+fmt(R.click)+" 🌸" : "full 🌸"); if(got>0) FX.post(e.clientX, e.clientY); }
+}
+const POST_MILESTONES = [100, 1000, 10000, 100000, 1000000];
+function celebrate(n){ // a posting milestone: she lights up
+  const w = $("you-wrap"), r = w.getBoundingClientRect();
+  FX.sparkle(r.left+r.width/2, r.top+r.height/2); sfx.shiny();
+  w.classList.remove("beam"); void w.offsetWidth; w.classList.add("beam");
+  log("🎉 post number <b>"+fmt(n)+"</b>. she's glowing.");
 }
 function floatText(x, y, txt){
   const f = el("div", "float", txt);
@@ -356,11 +374,29 @@ function memeIt(times){
   S.res.vibes -= times*MEME_COST; gain(S, "memes", times, R.cap.memes);
   sfx.post(); update();
 }
-function buyBuilding(id, card){
-  const b = byId(BUILDINGS, id), c = priceOf(b, S);
-  if(!canPay(S, c)) return sfx.no();
-  pay(S, c); S.b[id]++; sfx.buy(); FX.buy(card);
-  if(S.b[id]===1) log("🏗️ you built your first <b>"+b.name+"</b>.");
+/* buying buildings by the one, the ten, or as many as you can: the network tab's selector, or shift for ten */
+function priceN(b, s, n){
+  const k = s.b[b.id] || 0, c = {}, f = b.ratio===1 ? n : (Math.pow(b.ratio, n) - 1)/(b.ratio - 1);
+  for(const r in b.cost) c[r] = b.cost[r] * Math.pow(b.ratio, k) * f;
+  return c;
+}
+function maxAfford(b, s){
+  let n = 0;
+  while(n < 500 && canPay(s, priceN(b, s, n+1))) n++;
+  return n;
+}
+const buyMode = () => S.settings.buyN || "1";
+function wantN(b, shift){ // how many a click buys (and the card prices)
+  const m = shift ? "10" : buyMode();
+  return m==="max" ? Math.max(1, maxAfford(b, S)) : +m;
+}
+function buyBuilding(id, card, shift){
+  const b = byId(BUILDINGS, id), want = wantN(b, shift);
+  let n = 0;
+  while(n < want && canPay(S, priceOf(b, S))){ pay(S, priceOf(b, S)); S.b[id]++; n++; } // as many of them as you can afford
+  if(!n) return sfx.no();
+  sfx.buy(); FX.buy(card, n>1);
+  if(S.b[id]===n) log("🏗️ you built your first <b>"+b.name+"</b>"+(n>1 ? ", and "+(n-1)+" more" : "")+".");
   refresh();
 }
 function buyTech(id, card){
@@ -413,10 +449,11 @@ function touchGrass(into){
     (ch ? '<p class="unlock-note">⚖️ the next run is a challenge: <b>'+ch.name+'</b>. '+ch.rule+'</p>' : "")+
     '<div class="row"><button class="btn big" id="grass-yes">touch grass 🌿</button><button class="btn small" data-close>not yet</button></div>');
   $("grass-yes").onclick = ()=>{
+    try{ save(); localStorage.setItem(BACKUP_KEY, JSON.stringify({ t:Date.now(), save:S })); }catch(e){} // a way back, in case
     const done = Object.assign({}, S.chDone);
     if(met) done[S.challenge] = true;
     const keep = { grass:S.grass+g, perks:S.perks, ach:S.ach, you:S.you, settings:S.settings, started:true, relics:S.relics, chDone:done,
-      challenge:into||null, autoJob:S.autoJob, stats:Object.assign(S.stats, { resets:S.stats.resets+1 }), log:[], nextId:S.nextId };
+      challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, netName:S.netName, stats:Object.assign(S.stats, { resets:S.stats.resets+1 }), log:[], nextId:S.nextId };
     S = fresh(keep);
     applyPerksAtStart(S);
     closeModal(); sfx.shiny(); FX.grass(); galleryKnown = null;
@@ -508,12 +545,13 @@ function raidHome(s, i, live){
   let relic = null;
   if(rnd() < Math.min(1, r.relic * (1 + (f.relicChance||0)))){
     const pool = RELICS.filter(q=>(s.relics[q.id]||0) < RELIC_MAX);
-    if(pool.length){ relic = choice(pool); s.relics[relic.id] = (s.relics[relic.id]||0) + 1; }
+    if(pool.length){ relic = choice(pool); s.relics[relic.id] = (s.relics[relic.id]||0) + 1; if(relic.wear && live) drawYou(); }
   }
   const msg = "⚔️ the raid on <b>"+r.name+"</b> came home: "+(got.join(" ") || "nothing fit, build more storage")+"."+
     (lost.length ? " "+lost.map(m=>m.name).join(", ")+" stayed with the other side." : "")+
     (relic ? " they found a relic: "+relic.icon+" <b>"+relic.name+"</b>"+(s.relics[relic.id]>1 ? " (level "+s.relics[relic.id]+")" : "")+"." : "");
   log(msg, lost.length ? "bad" : "");
+  if(document.hidden) raidBack = true;
   if(live){ toast(msg, 5000); if(relic) sfx.shiny(); }
 }
 
@@ -535,6 +573,8 @@ function spawnSparkle(){
   sp.style.left = (8 + rnd()*80)+"vw"; sp.style.top = (15 + rnd()*65)+"vh";
   sp.onclick = ()=>{ const r = sp.getBoundingClientRect(); FX.sparkle(r.left+r.width/2, r.top+r.height/2); sp.remove(); catchSparkle(); };
   document.body.appendChild(sp);
+  sfx.chime();
+  setTimeout(()=>sp.classList.add("fading"), 10000); // three seconds of warning before it goes
   setTimeout(()=>sp.remove(), 13000);
 }
 function catchSparkle(){
@@ -576,10 +616,25 @@ function tabs(){
 let tab = "network", sig = "";
 
 function costHtml(c, cls){
+  const t = eta(c);
   return '<span class="cost '+(cls||"")+'">'+Object.keys(c).map(k=>{
     const have = S.res[k] >= c[k]-1e-9, over = c[k] > R.cap[k]+1e-9;
     return '<i data-r="'+k+'" class="'+(have ? "ok" : over ? "over" : "")+'">'+resIcon(k)+" "+fmt(c[k])+"</i>";
-  }).join("")+"</span>";
+  }).join("")+(t ? '<span class="eta">'+t+'</span>' : "")+"</span>";
+}
+/* how long until you can pay for this, at the rate you're going: nothing when you already can, nothing when it
+   won't fit in storage (the card says so), "not at this rate" when something it needs isn't coming in */
+function eta(c){
+  let worst = 0;
+  for(const k in c){
+    const need = c[k] - S.res[k];
+    if(need <= 1e-9) continue;
+    if(c[k] > R.cap[k]+1e-9) return "";
+    const rate = R.net[k] + (k==="vibes" ? R.click*R.autoclick : 0);
+    if(rate <= 1e-9) return "⏳ not at this rate";
+    worst = Math.max(worst, need/rate);
+  }
+  return worst ? "⏳ "+(worst > 99*3600 ? "ages" : fmtTime(Math.ceil(worst))) : "";
 }
 function fxLine(fx){
   const out = [];
@@ -619,25 +674,52 @@ function build(){
   const nav = $("tabs"); nav.innerHTML = "";
   for(const t of tabs()){
     const b = el("button", "pick"+(t.id===tab ? " on" : ""), t.name);
-    b.onclick = ()=>{ tab = t.id; refresh(true); const tb = $("tab-body"); tb.classList.remove("enter"); void tb.offsetWidth; tb.classList.add("enter"); };
+    if(!S.seenNew["tab:"+t.id]) b.classList.add("fresh");
+    b.onclick = ()=>{ commitSeen(); S.seenNew["tab:"+t.id] = 1; tab = t.id; refresh(true); const tb = $("tab-body"); tb.classList.remove("enter"); void tb.offsetWidth; tb.classList.add("enter"); };
     b.dataset.tab = t.id;
     nav.appendChild(b);
   }
   if(S.challenge){ const c = byId(CHALLENGES, S.challenge); body.appendChild(el("div", "challenge-bar", "⚖️ challenge: <b>"+c.name+"</b>. "+c.rule+(c.id==="speed" ? ' <span id="speed-left"></span>' : ""))); }
   ({ network:buildNetwork, miladys:buildMiladys, lore:buildLore, upgrades:buildUpgrades, rituals:buildRituals,
      raids:buildRaids, cathedral:buildCathedral, grass:buildGrass }[tab] || buildStats)(body);
+  tagNew(body);
+}
+/* "new!": anything you haven't seen before wears a tag until you've been to its tab and left again (or bought it).
+   Seen is forever, across touching grass. */
+const NEW_ATTRS = ["b","t","u","rit","raid","p","ch","j"];
+let pendingSeen = new Set();
+function tagNew(body){
+  body.querySelectorAll(NEW_ATTRS.map(a=>"[data-"+a+"]").join(",")).forEach(c=>{
+    const a = NEW_ATTRS.find(a=>c.dataset[a]!=null), key = a+":"+c.dataset[a];
+    if(S.seenNew[key]) return;
+    pendingSeen.add(key);
+    c.classList.add("fresh");
+    (c.querySelector(".ct b, .jn b") || c).insertAdjacentHTML("beforeend", ' <span class="new-tag">new</span>');
+    c.addEventListener("click", ()=>{ S.seenNew[key] = 1; }, { once:true });
+  });
+}
+function commitSeen(){ for(const k of pendingSeen) S.seenNew[k] = 1; pendingSeen = new Set(); }
+function markAllSeen(){ // an old save: what's already there isn't news
+  const mark = (p, list, ok) => list.forEach(x=>{ if(ok(x)) S.seenNew[p+":"+x.id] = 1; });
+  mark("b", BUILDINGS, b=>shown(b) || S.b[b.id]); mark("t", TECHS, t=>techShown(t) || S.tech[t.id]); mark("u", UPGRADES, u=>shown(u) || S.up[u.id]);
+  mark("j", JOBS, shown); mark("rit", RITUALS, shown); mark("raid", RAIDS, ()=>S.tech.raiding); mark("p", PERKS, p=>opened(S, p)); mark("ch", CHALLENGES, ()=>resets(S)>=5);
+  tabs().forEach(t=>S.seenNew["tab:"+t.id] = 1);
 }
 function card(title, desc, onclick){
   const c = el("button", "card");
   c.innerHTML = '<div class="ct"><b>'+title+'</b><em></em></div><div class="cd">'+desc+'</div><div class="cc"></div>';
-  c.onclick = ()=>onclick(c);
+  c.onclick = e=>onclick(c, e);
   return c;
 }
 function buildNetwork(body){
+  const bar = el("div", "buy-bar");
+  bar.innerHTML = '<span>buy</span><span class="seg">'+["1","10","max"].map(m=>'<button class="pick'+(buyMode()===m ? " on" : "")+'" data-buy="'+m+'">'+(m==="max" ? "max" : "×"+m)+'</button>').join("")+'</span><span class="note">shift-click buys ten</span>';
+  bar.querySelectorAll("[data-buy]").forEach(x=>x.onclick = ()=>{ S.settings.buyN = x.dataset.buy; refresh(true); });
+  body.appendChild(bar);
   const grid = el("div", "grid");
   for(const b of BUILDINGS){
     if(!shown(b) && !S.b[b.id]) continue;
-    const c = card(b.name+NEW_LAYER(b), b.desc+(fxLine(b.fx) ? '<br><span class="fx">'+fxLine(b.fx)+'</span>' : ""), c=>buyBuilding(b.id, c));
+    const c = card(b.name+NEW_LAYER(b), b.desc+(fxLine(b.fx) ? '<br><span class="fx">'+fxLine(b.fx)+'</span>' : ""), (c, e)=>buyBuilding(b.id, c, e && e.shiftKey));
     c.dataset.b = b.id;
     grid.appendChild(c);
   }
@@ -661,8 +743,10 @@ function buildMiladys(body){
     const row = el("div", "job");
     row.dataset.j = j.id;
     row.innerHTML = '<div class="jn"><b>'+j.icon+" "+j.name+NEW_LAYER(j)+'</b><span>'+j.desc+'</span><span class="jr"></span></div>'+
-      '<div class="jc"><button class="btn small" data-d="-1" title="shift: 10">−</button><b class="jcount">0</b><button class="btn small" data-d="1" title="shift: 10">+</button></div>';
+      '<div class="jc"><button class="btn small" data-d="-1" title="shift: 10">−</button><b class="jcount">0</b><button class="btn small" data-d="1" title="shift: 10">+</button>'+
+      '<button class="btn small all" data-d="all" title="every idle milady">all</button></div>';
     row.querySelectorAll("button").forEach(btn=>btn.onclick = e=>{
+      if(btn.dataset.d==="all") return assign(j.id, R.jobs.idle);
       const n = e.shiftKey ? 10 : 1;
       btn.dataset.d==="1" ? assign(j.id, n) : unassign(j.id, n);
     });
@@ -672,19 +756,41 @@ function buildMiladys(body){
   const rem = S.miladys.filter(m=>m.kind==="remilio").length;
   const g = el("div", "box-h", "the network <span>"+S.miladys.length+(rem ? " · "+rem+" remilios" : "")+"</span>");
   body.appendChild(g);
+  // which of them to show, and in what order
+  const ctl = el("div", "gal-ctl");
+  const opt = (v, l, cur) => '<option value="'+v+'"'+(cur===v ? " selected" : "")+'>'+l+'</option>';
+  ctl.innerHTML = '<select id="gal-filter" class="name-in" aria-label="show">'+opt("all","everyone",galFilter)+opt("idle","💤 idle",galFilter)+
+    (R.jobs.away ? opt("away","⚔️ away raiding",galFilter) : "")+(rem ? opt("milady","miladys",galFilter)+opt("remilio","remilios",galFilter) : "")+
+    JOBS.filter(shown).map(j=>opt(j.id, j.icon+" "+j.name+"s", galFilter)).join("")+'</select>'+
+    '<select id="gal-sort" class="name-in" aria-label="order">'+opt("new","newest first",galSort)+opt("old","oldest first",galSort)+opt("name","by name",galSort)+opt("job","by job",galSort)+'</select>';
+  body.appendChild(ctl);
+  ctl.querySelector("#gal-filter").onchange = e=>{ galFilter = e.target.value; fillGallery(); };
+  ctl.querySelector("#gal-sort").onchange = e=>{ galSort = e.target.value; fillGallery(); };
   const gal = el("div", "gallery");
   gal.id = "gallery";
   body.appendChild(gal);
   fillGallery();
 }
 let galleryKnown = null; // ids already shown, so only new faces pop in
+let galFilter = "all", galSort = "new";
+function galleryList(){
+  const jobOrder = m => m.away ? 99 : m.job ? JOBS.findIndex(j=>j.id===m.job) : 98;
+  let list = S.miladys.filter(m=>galFilter==="all" ? true : galFilter==="idle" ? !m.job && !m.away : galFilter==="away" ? !!m.away :
+    galFilter==="milady" ? m.kind!=="remilio" : galFilter==="remilio" ? m.kind==="remilio" : m.job===galFilter && !m.away);
+  if(galSort==="new") list = list.slice().reverse();
+  else if(galSort==="name") list = list.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  else if(galSort==="job") list = list.slice().sort((a,b)=>jobOrder(a)-jobOrder(b));
+  return list;
+}
 function fillGallery(){
   const gal = $("gallery"); if(!gal) return;
   gal.innerHTML = "";
   const known = galleryKnown;
   galleryKnown = new Set(S.miladys.map(m=>m.id));
   if(!S.miladys.length){ gal.innerHTML = '<p class="note">nobody yet. build a group chat and keep the vibes up.</p>'; return; }
-  for(const m of S.miladys){
+  const list = galleryList();
+  if(!list.length){ gal.innerHTML = '<p class="note">nobody like that right now.</p>'; return; }
+  for(const m of list){
     const b = el("button", "mil j-"+(m.away ? "away" : m.job||"idle")+(m.kind==="remilio" ? " remilio" : "")+(known && !known.has(m.id) ? " new" : ""));
     b.title = m.name+(m.kind==="remilio" ? " (remilio)" : "")+" · "+(m.away ? "away raiding" : m.job ? JOB_BY[m.job].name : "idle");
     b.innerHTML = '<img alt=""><i>'+(m.away ? "⚔️" : m.job ? JOB_BY[m.job].icon : "💤")+"</i>";
@@ -815,7 +921,7 @@ function buildStats(body){
     '<span>raids come home</span><b>'+fmt(S.stats.raids||0)+'</b>'+
     '<span>market cycles</span><b>'+S.cycle+'</b>'+
     made+'</div>'+
-    '<div class="box-h">achievements <span>'+Object.keys(S.ach).length+" / "+ACHIEVEMENTS.length+'</span></div>'+
+    '<div class="box-h">achievements <span>'+Object.keys(S.ach).length+" / "+ACHIEVEMENTS.length+' · each one +'+pct(ACH_EACH)+' everything · now +'+pct(Object.keys(S.ach).length*ACH_EACH)+'</span></div>'+
     '<div class="achs">'+ACHIEVEMENTS.map(a=>'<div class="ach'+(S.ach[a.id] ? " got" : "")+'"><b>'+(S.ach[a.id] ? "🏆 " : "🔒 ")+a.name+'</b><span>'+a.desc+'</span></div>').join("")+'</div>';
   if(resets(S) >= 3 || Object.keys(S.relics).length) body.appendChild(relicShelf());
 }
@@ -832,7 +938,9 @@ function update(){
     if(!row){
       row = el("div", "res-row");
       row.dataset.r = r.id;
-      row.title = r.desc;
+      row.addEventListener("mouseenter", ()=>showTip(r.id, row));
+      row.addEventListener("mouseleave", ()=>{ if(!tipPinned) hideTip(); });
+      row.addEventListener("click", ()=>{ if(tipFor===r.id && tipPinned){ hideTip(); } else { showTip(r.id, row); tipPinned = true; } });
       row.innerHTML = '<span class="ri">'+resIcon(r.id)+'</span><span class="rn" style="color:'+r.color+'">'+r.name+'</span><span class="rv"></span><span class="rc"></span><span class="rr"></span><i class="rbar"><u style="background:'+r.color+'"></u></i>';
       // keep the order of RES
       const after = [...rows.children].find(x=>RES.findIndex(q=>q.id===x.dataset.r) > RES.findIndex(q=>q.id===r.id));
@@ -847,6 +955,9 @@ function update(){
     row.querySelector(".rbar u").style.width = Math.min(100, v/c*100)+"%";
     row.classList.toggle("full", v >= c-1e-6);
   }
+  if(tipFor && !$("tip").classList.contains("hidden")) $("tip").innerHTML = breakdown(tipFor);
+  const outfit = JSON.stringify(youLook()); // relics changed what she'd wear (a raid, a restored save): dress her again
+  if(outfit !== wornNow){ wornNow = outfit; drawYou(); }
   // you
   $("post-val").textContent = "+"+fmt(R.click)+" per post"+(R.autoclick ? " · bot posts "+R.autoclick+"/s" : "");
   const memeBtn = $("btn-meme");
@@ -867,6 +978,9 @@ function update(){
   $("phase-fill").style.width = (into/PHASE_SECS*100)+"%";
   $("phase-fill").style.background = ph.color;
   $("phase-left").textContent = fmtTime(PHASE_SECS-into);
+  const nx = rule(S, "bear") ? null : PHASES[(PHASES.indexOf(ph)+1) % PHASES.length];
+  $("phase-next").textContent = nx ? "→ "+nx.icon : "forever";
+  $("phase-next").title = nx ? "next: "+nx.name+" ("+nx.desc+")" : "bear season: it stays a bear market";
   FX.frenzy(S.buffs.some(b=>b.kind==="frenzy"));
   document.body.dataset.phase = ph.id;
   $("buffs").innerHTML = S.buffs.map(b=>'<span class="chip '+(b.happy<0 ? "bad" : "")+'">'+
@@ -883,9 +997,9 @@ function update(){
   // the open tab
   const body = $("tab-body");
   body.querySelectorAll("[data-b]").forEach(c=>{
-    const b = byId(BUILDINGS, c.dataset.b), p = priceOf(b, S);
+    const b = byId(BUILDINGS, c.dataset.b), n = wantN(b), p = priceN(b, S, n);
     c.querySelector("em").textContent = S.b[b.id] ? "×"+S.b[b.id] : "";
-    c.querySelector(".cc").innerHTML = costHtml(p);
+    c.querySelector(".cc").innerHTML = (n>1 ? '<span class="buy-n">+'+n+'</span>' : "")+costHtml(p);
     c.classList.toggle("cant", !canPay(S, p));
     c.classList.toggle("blocked", !fitsCap(p, R.cap));
   });
@@ -914,7 +1028,7 @@ function update(){
     row.querySelector(".jcount").textContent = cnt;
     const each = j.res ? j.rate*(1+(R.f["job."+j.id]||0))*R.happy : 0; // a milady's share; a remilio makes more
     row.querySelector(".jr").innerHTML = j.res ? fmt(each, each<1 ? 3 : 2)+" "+resIcon(j.res)+"/s each, before bonuses" : "";
-    row.querySelector('[data-d="1"]').disabled = !R.jobs.idle;
+    row.querySelector('[data-d="1"]').disabled = row.querySelector('[data-d="all"]').disabled = !R.jobs.idle;
     row.querySelector('[data-d="-1"]').disabled = !cnt;
   });
   if($("pop-count")){
@@ -970,6 +1084,50 @@ function readyCounts(){
   return c;
 }
 
+/* ---------- where a number comes from ---------- */
+function breakdown(id){
+  const s = S, f = R.f, r = RES_BY[id], lines = [];
+  let base = 0;
+  for(const j of JOBS) if(j.res===id && R.jobs.w[j.id]){
+    const v = R.jobs.w[j.id] * j.rate * (1 + (f["job."+j.id]||0)) * R.happy;
+    base += v; lines.push([R.jobs[j.id]+" "+j.name+(R.jobs[j.id]>1 ? "s" : ""), v]);
+  }
+  for(const b of BUILDINGS) if(s.b[b.id] && b.fx["rate."+id]){ const v = s.b[b.id]*b.fx["rate."+id]; base += v; lines.push([s.b[b.id]+" "+b.name+(s.b[b.id]>1 ? "s" : ""), v]); }
+  const idle = (f["idle."+id]||0) * R.jobs.idle; if(idle){ base += idle; lines.push([R.jobs.idle+" idle", idle]); }
+  const flat = (f["rate."+id]||0) - BUILDINGS.reduce((a,b)=>a + (s.b[b.id]||0)*(b.fx["rate."+id]||0), 0);
+  if(flat > 1e-9){ base += flat; lines.push(["other", flat]); }
+  const bonus = (f["mult."+id]||0) + (f.all||0), ph = R.phase.mod[id]||0, bf = buff(s, "all");
+  let html = '<b style="color:'+r.color+'">'+resIcon(id)+" "+r.name+'</b><div class="tip-d">'+r.desc+'</div><table>';
+  html += lines.length ? lines.map(([l,v])=>'<tr><td>'+l+'</td><td>'+fmtRate(v)+'</td></tr>').join("") : '<tr><td class="dim" colspan="2">nothing makes it yet</td></tr>';
+  if(lines.length){
+    if(lines.length>1) html += '<tr class="sum"><td>base</td><td>'+fmtRate(base)+'</td></tr>';
+    if(R.jobs.w && JOBS.some(j=>j.res===id && R.jobs.w[j.id])) html += '<tr class="m"><td>happiness</td><td>'+pct(R.happy)+' (in the jobs above)</td></tr>';
+    if(bonus) html += '<tr class="m"><td>bonuses</td><td>'+(bonus>0 ? "+" : "")+pct(bonus)+'</td></tr>';
+    if(ph) html += '<tr class="m"><td>'+R.phase.icon+" "+R.phase.name+'</td><td>'+(ph>0 ? "+" : "")+pct(ph)+'</td></tr>';
+    if(bf) html += '<tr class="m"><td>rituals</td><td>+'+pct(bf)+'</td></tr>';
+    if(R.grassMult > 1) html += '<tr class="m"><td>🌿 grass</td><td>×'+R.grassMult.toFixed(2)+'</td></tr>';
+    html += '<tr class="sum"><td>made</td><td>'+fmtRate(R.prod[id])+'</td></tr>';
+  }
+  if(id==="vibes"){
+    if(R.autoclick) html += '<tr><td>your posting bots</td><td>'+fmtRate(R.click*R.autoclick)+'</td></tr>';
+    if(R.eat) html += '<tr class="neg"><td>'+(S.miladys.length-R.jobs.away)+' miladys eating</td><td>'+fmtRate(-R.eat)+'</td></tr>';
+    html += '<tr class="sum"><td>all told</td><td>'+fmtRate(R.net.vibes + R.click*R.autoclick)+'</td></tr>';
+  }
+  html += '</table><div class="tip-d">room for '+fmt(R.cap[id])+(S.res[id] < R.cap[id] && R.net[id] > 0 ? " · full in "+fmtTime((R.cap[id]-S.res[id])/R.net[id]) : S.res[id] >= R.cap[id]-1e-6 ? " · full" : "")+'</div>';
+  return html;
+}
+let tipFor = null, tipPinned = false, tipAt = null;
+function showTip(id, row){
+  const t = $("tip"); tipFor = id; tipAt = row;
+  t.innerHTML = breakdown(id); t.classList.remove("hidden");
+  const r = row.getBoundingClientRect(), w = t.offsetWidth, h = t.offsetHeight;
+  let x = r.right + 10, y = r.top - 6;
+  if(x + w > innerWidth - 8) x = Math.max(8, r.left + r.width/2 - w/2), y = r.bottom + 8; // no room beside it: below it
+  t.style.left = x+"px"; t.style.top = Math.max(8, Math.min(y, innerHeight - h - 8))+"px";
+}
+function hideTip(){ $("tip").classList.add("hidden"); tipFor = null; tipPinned = false; }
+document.addEventListener("click", e=>{ if(tipPinned && !e.target.closest("#tip, .res-row")) hideTip(); });
+
 /* rebuild when the set of things on screen changes, otherwise just update */
 function signature(){
   return [tab, tabs().map(t=>t.id).join(), BUILDINGS.filter(b=>shown(b)||S.b[b.id]).length,
@@ -1020,8 +1178,14 @@ function openSettings(){
     '<div class="set-row"><span>calm (less motion)</span><button class="tog'+(S.settings.calm ? " on" : "")+'" id="set-calm">'+(S.settings.calm ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>numbers</span><span class="seg">'+Object.keys(NOTATIONS).map(k=>'<button class="pick'+((S.settings.num||"short")===k ? " on" : "")+'" data-num="'+k+'">'+NOTATIONS[k]+'</button>').join("")+'</span></div>'+
     '<div class="set-row"><span>your milady</span><button class="btn small" id="set-reroll">reroll her</button></div>'+
-    '<div class="set-row"><span>save</span><span><button class="btn small" id="set-export">export</button> <button class="btn small" id="set-import">import</button></span></div>'+
+    '<div class="set-row"><span>effects volume</span><input id="set-vol" type="range" min="0" max="100" value="'+(S.settings.vol!=null ? S.settings.vol : 70)+'"></div>'+
+    '<div class="set-row"><span>your network\'s name</span><span><input id="set-name" class="name-in" maxlength="24" placeholder="the network" value="'+esc(S.netName||"")+'"> <button class="btn small" id="set-name-ok">name it</button></span></div>'+
+    '<div class="set-row"><span>wear your relics</span><button class="tog'+(S.settings.wear!==false ? " on" : "")+'" id="set-wear">'+(S.settings.wear!==false ? "on" : "off")+'</button></div>'+
+    '<div class="set-row"><span>save file</span><span><button class="btn small" id="set-download">download</button> <button class="btn small" id="set-upload">load a file</button></span></div>'+
+    '<input id="save-file" type="file" accept=".json,application/json" class="hidden">'+
+    '<div class="set-row"><span>save as text</span><span><button class="btn small" id="set-export">copy</button> <button class="btn small" id="set-import">paste</button></span></div>'+
     '<textarea id="save-box" class="save-box hidden" spellcheck="false"></textarea>'+
+    (backup() ? '<div class="set-row"><span>from before you last touched grass ('+new Date(backup().t).toLocaleString()+')</span><button class="btn small" id="set-restore">restore it</button></div>' : "")+
     '<div class="set-row"><span>start over, for real</span><button class="btn small danger" id="set-wipe">wipe save</button></div>'+
     '<p class="note">the game saves itself every few seconds, in this browser. export it to move it somewhere else.</p>'+
     '<div class="row"><button class="btn small" data-close>close</button></div>');
@@ -1030,6 +1194,26 @@ function openSettings(){
   $("set-calm").onclick = ()=>{ S.settings.calm = !S.settings.calm; syncLook(); openSettings(); };
   document.querySelectorAll("#modal [data-num]").forEach(b=>b.onclick = ()=>{ S.settings.num = b.dataset.num; refresh(true); renderLog(); openSettings(); });
   $("set-reroll").onclick = ()=>{ S.you = rollLook(); drawYou(); };
+  $("set-vol").oninput = e=>{ S.settings.vol = +e.target.value; };
+  $("set-vol").onchange = ()=>sfx.post();
+  $("set-name-ok").onclick = ()=>{ S.netName = $("set-name").value.trim().slice(0, 24); syncName(); toast(S.netName ? "🌸 "+esc(S.netName)+" is growing" : "it's the network again"); };
+  $("set-wear").onclick = ()=>{ S.settings.wear = S.settings.wear===false; drawYou(); openSettings(); };
+  $("set-download").onclick = ()=>{
+    save();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(S)], { type:"application/json" }));
+    a.download = "network-"+new Date().toISOString().slice(0,10)+".json"; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+  };
+  $("set-upload").onclick = ()=>$("save-file").click();
+  $("save-file").onchange = e=>{
+    const file = e.target.files[0]; if(!file) return;
+    file.text().then(t=>loadSave(JSON.parse(t))).catch(()=>toast("that file didn't read"));
+  };
+  if($("set-restore")) $("set-restore").onclick = ()=>{
+    openModal('<h2>go back?</h2><p>back to just before you last touched grass ('+new Date(backup().t).toLocaleString()+'). everything since then goes.</p><div class="row"><button class="btn danger" id="restore-yes">go back</button><button class="btn small" data-close>no</button></div>');
+    $("restore-yes").onclick = ()=>loadSave(backup().save);
+  };
   $("set-export").onclick = ()=>{
     save();
     const box = $("save-box"); box.classList.remove("hidden");
@@ -1039,15 +1223,24 @@ function openSettings(){
   $("set-import").onclick = ()=>{
     const box = $("save-box");
     if(box.classList.contains("hidden") || !box.value.trim()){ box.classList.remove("hidden"); box.value = ""; box.placeholder = "paste a save here, then press import again"; box.focus(); return; }
-    try{
-      S = migrate(JSON.parse(decodeURIComponent(escape(atob(box.value.trim())))));
-      save(); closeModal(); drawYou(); refresh(true); renderLog(); toast("save loaded");
-    }catch(e){ toast("that save didn't read"); }
+    try{ loadSave(JSON.parse(decodeURIComponent(escape(atob(box.value.trim()))))); }
+    catch(e){ toast("that save didn't read"); }
   };
   $("set-wipe").onclick = ()=>{
     openModal('<h2>wipe everything?</h2><p>grass, perks, achievements, all of it. there\'s no undo.</p><div class="row"><button class="btn danger" id="wipe-yes">wipe it</button><button class="btn small" data-close>no</button></div>');
     $("wipe-yes").onclick = ()=>{ localStorage.removeItem(SAVE_KEY); S = null; location.reload(); };
   };
+}
+function loadSave(data){
+  if(!data || !data.res || !data.miladys) return toast("that isn't a save");
+  S = migrate(data); S.started = true; S.last = Date.now();
+  save(); closeModal(); galleryKnown = null; drawYou(); syncName(); refresh(true); renderLog(); toast("save loaded");
+}
+const BACKUP_KEY = "network-backup-v1";
+function backup(){ try{ return JSON.parse(localStorage.getItem(BACKUP_KEY)); }catch(e){ return null; } }
+function syncName(){
+  document.querySelectorAll(".brand").forEach(b=>b.innerHTML = (S.netName ? esc(S.netName) : "the network")+" <b>is growing</b>");
+  setTitle();
 }
 function syncLook(){
   document.body.classList.toggle("calm", !!S.settings.calm);
@@ -1072,8 +1265,18 @@ function openHelp(){
 }
 
 /* ---------- you ---------- */
+/* your milady puts on the relics you hold: one per slot, the highest level wins */
+function youLook(){
+  const look = Object.assign({}, S.you);
+  if(S.settings.wear===false) return look;
+  const best = {};
+  for(const r of RELICS){ const lv = S.relics[r.id]||0; if(lv && r.wear && (!best[r.wear[0]] || lv > best[r.wear[0]].lv)) best[r.wear[0]] = { lv, file:r.wear[1] }; }
+  for(const slot in best) look[slot] = best[slot].file;
+  return look;
+}
+let wornNow = "";
 async function drawYou(){
-  const cv = await compose(S.you, true);
+  const cv = await compose(youLook(), true);
   for(const id of ["you", "title-you", "fab-you"]){
     const c = $(id); if(!c) continue;
     const cx = c.getContext("2d"); cx.clearRect(0, 0, 600, 750); cx.drawImage(cv, 0, 0);
@@ -1086,17 +1289,23 @@ function catchUp(){
   const away = Math.min(cap, (Date.now() - S.last)/1000);
   S.last = Date.now();
   if(away <= 0) return;
-  const before = Object.assign({}, S.res), people = S.miladys.length;
+  const before = Object.assign({}, S.res), people = S.miladys.length, firstId = S.nextId, raids = S.stats.raids||0,
+    relics = Object.assign({}, S.relics), cycles = S.cycle;
   const step = Math.max(1, away/20000);
   for(let t=0; t<away; t+=step) tick(S, Math.min(step, away-t), false);
   const got = RES.filter(r=>isVisible(r.id) && Math.abs(S.res[r.id]-before[r.id]) >= 1)
     .map(r=>'<span class="chip">'+(S.res[r.id]>=before[r.id] ? "+" : "")+fmt(S.res[r.id]-before[r.id])+" "+resIcon(r.id)+"</span>").join(" ");
-  const dp = S.miladys.length - people;
-  const msg = "while you were away ("+fmtTime(away)+"): "+(got || "nothing much.")+(dp ? " "+(dp>0 ? "+" : "")+dp+" miladys." : "");
+  const joined = S.nextId - firstId, left = joined - (S.miladys.length - people), back = (S.stats.raids||0) - raids;
+  const found = RELICS.filter(r=>(S.relics[r.id]||0) > (relics[r.id]||0)).map(r=>r.icon+" "+r.name+(S.relics[r.id]>1 ? " (lv "+S.relics[r.id]+")" : ""));
+  const lines = [joined && "🌸 "+joined+" miladys joined", left > 0 && "🥀 "+left+" logged off", back && "⚔️ "+back+" raid"+(back>1 ? "s" : "")+" came home",
+    found.length && "🗿 relics: "+found.join(", "), S.cycle > cycles && "📈 the market went round "+(S.cycle-cycles)+" time"+(S.cycle-cycles>1 ? "s" : "")].filter(Boolean);
+  const msg = "while you were away ("+fmtTime(away)+"): "+(got || "nothing much.")+(lines.length ? " "+lines.join(" · ")+"." : "");
   if(away < 60) return; // a tab that was in the background a moment isn't worth a message
   log("🌙 "+msg);
-  if(away > 300) openModal('<h2>welcome back</h2><p>you were gone '+fmtTime(away)+'. the network kept going.</p><p>'+(got||"nothing much happened.")+'</p>'+
-    (dp ? '<p>'+(dp>0 ? dp+" miladys joined." : (-dp)+" miladys left.")+'</p>' : "")+'<div class="row"><button class="btn big" data-close>back to it</button></div>');
+  if(away > 300) openModal('<h2>welcome back</h2><p>you were gone '+fmtTime(away)+'. '+netName()+' kept going.</p><p>'+(got||"nothing much happened.")+'</p>'+
+    (lines.length ? '<ul class="away">'+lines.map(l=>"<li>"+l+"</li>").join("")+'</ul>' : "")+
+    (away >= (S.perks.sleep ? 24 : 8)*3600 - 1 ? '<p class="note">that\'s as much time as counts. the sleep schedule perk makes it 24 hours.</p>' : "")+
+    '<div class="row"><button class="btn big" data-close>back to it</button></div>');
 }
 
 /* ---------- achievements ---------- */
@@ -1104,7 +1313,7 @@ function checkAch(){
   for(const a of ACHIEVEMENTS){
     if(S.ach[a.id]) continue;
     let ok = false; try{ ok = a.test(S, R); }catch(e){}
-    if(ok){ S.ach[a.id] = Date.now(); toast("🏆 <b>"+a.name+"</b> · "+a.desc, 4200); log("🏆 achievement: <b>"+a.name+"</b>."); sfx.shiny(); }
+    if(ok){ S.ach[a.id] = Date.now(); toast("🏆 <b>"+a.name+"</b> · "+a.desc+' <span class="dim">+'+pct(ACH_EACH)+' everything</span>', 4200); log("🏆 achievement: <b>"+a.name+"</b>."); sfx.shiny(); }
   }
 }
 
@@ -1263,8 +1472,14 @@ function startGame(){
 /* one clock: S.last is when the game was last advanced. A short gap is played live; a long one
    (a background tab, a closed laptop) is caught up the way time away is. */
 let saveT = 0, achT = 0;
+let titleT = 0, raidBack = false;
+function setTitle(){
+  const base = netName()+" is growing";
+  document.title = S.started ? (raidBack ? "⚔️ raid's back · " : "")+"🌸 "+fmt(S.res.vibes)+" · "+base : base+" · Tyler (in real life)";
+}
 function frame(){
   if(!S || !S.started) return;
+  if((titleT += 1) % 7 === 0) setTitle(); // about once a second
   const now = Date.now(), dt = (now - S.last)/1000;
   if(dt > 5){ catchUp(); refresh(true); }
   else if(dt > 0){ tick(S, dt, true); S.last = now; }
@@ -1278,7 +1493,8 @@ async function init(){
   try{ await loadAssets(); }catch(e){ console.warn("assets", e); }
   S = load();
   if(!S){ S = fresh(); }
-  syncLook(); FX.start();
+  if(!S.seenInit){ R = rates(S); markAllSeen(); S.seenInit = true; }
+  syncLook(); syncName(); FX.start();
   fitUI(); addEventListener("resize", fitUI);
   if(!S.you) S.you = rollLook();
   // the bindings
@@ -1297,7 +1513,7 @@ async function init(){
   $("title-reroll").onclick = ()=>{ S.you = rollLook(); drawYou(); const c = $("title-you"); c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop"); };
   $("btn-logon").onclick = ()=>{ S.started = true; S.last = Date.now(); save(); startGame(); };
   document.addEventListener("keydown", onKey);
-  document.addEventListener("visibilitychange", ()=>{ if(document.hidden) save(); else frame(); });
+  document.addEventListener("visibilitychange", ()=>{ if(document.hidden) save(); else { raidBack = false; frame(); setTitle(); } });
   window.addEventListener("pagehide", save);
   document.querySelectorAll('a[href*="cancel.tylerirl.com"]').forEach(a=>a.addEventListener("click", save)); // off to the other game: save on the way out
 

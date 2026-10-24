@@ -530,3 +530,50 @@ button,a,select{touch-action:manipulation;} /* no double-tap zoom on anything yo
   .seg.wrap .pick{flex:1 1 auto;}
   .toast{font-size:12px;}
 }
+
+/* ---------- polish ---------- */
+/* buying several */
+.buy-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:#aaa;}
+.buy-bar .note{font-size:10px;}
+.buy-n{display:inline-block;font-size:10px;font-weight:bold;color:#000;background:var(--neon);border-radius:4px;padding:0 5px;margin-right:6px;vertical-align:1px;}
+/* how long until you can afford it */
+.cost .eta{font-size:10px;color:#7c8a90;letter-spacing:.02em;flex-basis:100%;}
+/* where a number comes from */
+.res-row{cursor:help;border-radius:6px;}
+.res-row:hover{background:rgba(139,233,253,.05);}
+#tip{position:fixed;z-index:115;width:min(300px,calc(100vw - 16px));padding:10px 12px;font-size:12px;border-radius:12px;pointer-events:auto;
+  background:rgba(2,6,8,.92);border:1px solid rgba(139,233,253,.35);border-top-color:rgba(255,255,255,.2);box-shadow:0 8px 30px rgba(0,0,0,.6);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);animation:fadein .15s;}
+#tip>b{font-size:13px;}
+#tip .tip-d{color:#8a979c;font-size:11px;margin:3px 0 6px;}
+#tip table{width:100%;border-collapse:collapse;}
+#tip td{padding:2px 0;color:#ccc;} #tip td:last-child{text-align:right;font-variant-numeric:tabular-nums;color:var(--acid);white-space:nowrap;padding-left:10px;}
+#tip tr.m td{color:#9aa6ab;} #tip tr.m td:last-child{color:var(--gold);}
+#tip tr.neg td:last-child{color:var(--red);}
+#tip tr.sum td{border-top:1px solid var(--line);font-weight:bold;color:#fff;padding-top:4px;}
+/* the next market phase */
+#phase-next{color:#666;font-size:11px;cursor:help;}
+/* new things */
+.new-tag{display:inline-block;font-size:9px;font-weight:bold;letter-spacing:.08em;text-transform:uppercase;color:#000;background:var(--pink);
+  border-radius:4px;padding:1px 5px;margin-left:4px;vertical-align:2px;animation:newtag 1.6s ease-in-out infinite;}
+@keyframes newtag{50%{box-shadow:0 0 10px rgba(255,121,198,.8);}}
+.card.fresh{border-color:rgba(255,121,198,.55);}
+.pick.fresh:not(.on){border-color:rgba(255,121,198,.6);color:var(--pink);}
+.pick.fresh:not(.on)::before{content:"new ";font-size:9px;font-weight:bold;color:var(--pink);}
+body.calm .new-tag{animation:none;}
+/* the miladys tab */
+.job .jc .all{min-width:40px;font-size:10px;}
+.gal-ctl{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px;}
+.gal-ctl select{padding:5px 8px;font-size:12px;}
+/* welcome back */
+.away{margin:6px 0 10px;padding-left:18px;font-size:13px;line-height:1.7;}
+/* a posting milestone: she glows */
+#you-wrap.beam #you{animation:beam 2.2s ease-out;}
+@keyframes beam{0%{box-shadow:0 0 0 0 rgba(255,255,255,.9),0 0 60px rgba(255,121,198,.9);filter:brightness(1.6);}100%{box-shadow:0 0 22px rgba(var(--ph),.25);filter:none;}}
+/* a sparkle about to go: it rings and fades */
+.sparkle.fading{animation:sparkle 1.6s ease-in-out infinite,sparkfade 3s linear forwards;}
+.sparkle.fading::after{content:"";position:absolute;inset:-14px;border:2px solid rgba(139,233,253,.8);border-radius:50%;animation:sparkring 1s ease-out infinite;}
+@keyframes sparkfade{to{opacity:.15;}}
+@keyframes sparkring{from{transform:scale(.6);opacity:1;}to{transform:scale(1.4);opacity:0;}}
+/* sliders */
+input[type=range]{accent-color:var(--neon);width:150px;}

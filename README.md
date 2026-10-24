@@ -31,6 +31,10 @@ The keyboard does everything too: arrow keys move a highlight over whatever's on
 
 Numbers can be written short (1.23M), scientific (1.23e6), engineering (45.6e6) or in words (1.23 million), in settings.
 
+Hover a resource (or tap it) to see where it comes from. Every price says how long until you can afford it. Buildings buy by the one, the ten or as many as you can. Tabs light up when there's something on them you can do, and anything new wears a tag until you've seen it. Every achievement is worth +1% to everything.
+
+Settings can name your network, download the save as a file or load one, and put you back to just before you last touched grass. Your Milady wears the relics you find.
+
 ## Running it yourself
 
 It's a static site. No build step, no framework, no dependencies. Even the animated backdrop is the game's own canvas: it's your network, one node per milady, and the market sets its weather.

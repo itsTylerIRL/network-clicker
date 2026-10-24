@@ -287,33 +287,34 @@ const RAIDS = [
   { id:"cancel",   name:"the cancel",       n:30, secs:2400, loot:{cult:1800, clout:1800, drip:1800, lore:1800}, relic:1, lose:0.3, desc:"it's coming anyway. go to it. (cancel.tylerirl.com)" },
 ];
 
-/* relics come home from raids and are kept forever. Another copy levels one up, to 5. fx is per level. */
+/* relics come home from raids and are kept forever. Another copy levels one up, to 5. fx is per level.
+   wear: the trait your own milady puts on while you hold it (one per slot: the highest level wins). */
 const RELIC_MAX = 5;
 const RELICS = [
-  { id:"hat",      name:"milady hat",       icon:"🧢", fx:{click:2},              desc:"+2 vibes per post" },
-  { id:"coin",     name:"cult coin",        icon:"🪙", fx:{"mult.cult":0.04},     desc:"+4% $CULT" },
-  { id:"light",    name:"pink ring light",  icon:"💡", fx:{"job.poster":0.05},    desc:"posters +5%" },
+  { id:"hat",      name:"milady hat",       icon:"🧢", fx:{click:2},              desc:"+2 vibes per post", wear:["Hat","Trucker Gothic Milady.webp"] },
+  { id:"coin",     name:"cult coin",        icon:"🪙", fx:{"mult.cult":0.04},     desc:"+4% $CULT", wear:["Necklaces","Silver Coin Necklace.webp"] },
+  { id:"light",    name:"pink ring light",  icon:"💡", fx:{"job.poster":0.05},    desc:"posters +5%", wear:["Glasses","Harajuku Glasses.webp"] },
   { id:"frog",     name:"frog plush",       icon:"🐸", fx:{"job.memer":0.05},     desc:"memers +5%" },
   { id:"scroll",   name:"lore scroll",      icon:"📜", fx:{"mult.lore":0.04},     desc:"+4% lore" },
   { id:"bonkler",  name:"bonkler figurine", icon:"🤖", fx:{all:0.02},             desc:"+2% everything" },
-  { id:"hoodie",   name:"hikki hoodie",     icon:"🧥", fx:{happy:0.02},           desc:"+2% happiness" },
-  { id:"nano",     name:"ledger nano",      icon:"🔐", fx:{"capMult.cult":0.1},   desc:"+10% room for $CULT" },
-  { id:"sticker",  name:"remilio sticker",  icon:"🏷️", fx:{"job.trader":0.05},    desc:"traders +5%" },
-  { id:"palette",  name:"paint palette",    icon:"🎨", fx:{"job.artist":0.06},    desc:"artists +6%" },
-  { id:"deck",     name:"stream deck",      icon:"🎛️", fx:{"job.streamer":0.06},  desc:"streamers +6%" },
-  { id:"hammer",   name:"ban hammer",       icon:"🔨", fx:{happy:0.02},           desc:"+2% happiness" },
-  { id:"chip",     name:"spare gpu",        icon:"🖥️", fx:{"mult.compute":0.05},  desc:"+5% compute" },
-  { id:"rosary",   name:"rosary",           icon:"📿", fx:{"mult.devotion":0.05}, desc:"+5% devotion" },
-  { id:"candle",   name:"prayer candle",    icon:"🕯️", fx:{"job.acolyte":0.06},   desc:"acolytes +6%" },
+  { id:"hoodie",   name:"hikki hoodie",     icon:"🧥", fx:{happy:0.02},           desc:"+2% happiness", wear:["Shirt","Hikki Condition Shirt.webp"] },
+  { id:"nano",     name:"ledger nano",      icon:"🔐", fx:{"capMult.cult":0.1},   desc:"+10% room for $CULT", wear:["Necklaces","Fliphone Lanyard.webp"] },
+  { id:"sticker",  name:"remilio sticker",  icon:"🏷️", fx:{"job.trader":0.05},    desc:"traders +5%", wear:["Shirt","Remilia Tank.webp"] },
+  { id:"palette",  name:"paint palette",    icon:"🎨", fx:{"job.artist":0.06},    desc:"artists +6%", wear:["Hat","Beret.webp"] },
+  { id:"deck",     name:"stream deck",      icon:"🎛️", fx:{"job.streamer":0.06},  desc:"streamers +6%", wear:["Hat","Kossphones.webp"] },
+  { id:"hammer",   name:"ban hammer",       icon:"🔨", fx:{happy:0.02},           desc:"+2% happiness", wear:["Earrings","Double Safety Pins.webp"] },
+  { id:"chip",     name:"spare gpu",        icon:"🖥️", fx:{"mult.compute":0.05},  desc:"+5% compute", wear:["Glasses","Prescription Glasses.webp"] },
+  { id:"rosary",   name:"rosary",           icon:"📿", fx:{"mult.devotion":0.05}, desc:"+5% devotion", wear:["Necklaces","Coral Cross Necklace.webp"] },
+  { id:"candle",   name:"prayer candle",    icon:"🕯️", fx:{"job.acolyte":0.06},   desc:"acolytes +6%", wear:["Earrings","Chrome Cross.webp"] },
   { id:"zipties",  name:"zip ties",         icon:"🪢", fx:{"capMult.memes":0.1},  desc:"+10% room for memes" },
   { id:"usb",      name:"flash drive",      icon:"💾", fx:{"capMult.lore":0.1},   desc:"+10% room for lore" },
   { id:"tama",     name:"tamagotchi",       icon:"🥚", fx:{autoclick:1},          desc:"posts for you once a second" },
-  { id:"cat",      name:"lucky cat",        icon:"🐱", fx:{sparkle:0.15},         desc:"sparkles +15% more often" },
+  { id:"cat",      name:"lucky cat",        icon:"🐱", fx:{sparkle:0.15},         desc:"sparkles +15% more often", wear:["Hat","Cat Ears with Bell.webp"] },
   { id:"keys",     name:"house keys",       icon:"🔑", fx:{housing:2},            desc:"room for 2 more miladys" },
-  { id:"teddy",    name:"teddy bear",       icon:"🧸", fx:{happy:0.03},           desc:"+3% happiness" },
-  { id:"glitter",  name:"glitter",          icon:"✨", fx:{"mult.drip":0.05},     desc:"+5% drip" },
+  { id:"teddy",    name:"teddy bear",       icon:"🧸", fx:{happy:0.03},           desc:"+3% happiness", wear:["Hat","Bear Ears.webp"] },
+  { id:"glitter",  name:"glitter",          icon:"✨", fx:{"mult.drip":0.05},     desc:"+5% drip", wear:["Face Decoration","Star Heart Tattoo.webp"] },
   { id:"mega",     name:"megaphone",        icon:"📢", fx:{"mult.clout":0.05},    desc:"+5% clout" },
-  { id:"clippings",name:"grass clippings",  icon:"🌿", fx:{grass:0.03},           desc:"+3% grass when you touch it" },
+  { id:"clippings",name:"grass clippings",  icon:"🌿", fx:{grass:0.03},           desc:"+3% grass when you touch it", wear:["Hat","Flower Clip.webp"] },
 ];
 
 /* the cathedral: built a stage at a time, in order. Every stage is +10% everything; some do more. */
