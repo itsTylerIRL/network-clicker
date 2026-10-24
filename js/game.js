@@ -447,8 +447,15 @@ function renderLog(){
 
 /* ---------- actions ---------- */
 let R = null; // the latest rates, for the page
+/* posting tops out at 25 a second, however it's done (a held key, an autoclicker): an account's saves are refused
+   past 30 a second (network_api.py, CLICKS_PER_SEC), so the game never gets near it */
+const POST_GAP = 40;
+let lastPost = 0;
 function post(e){
   if(rule(S, "logoff")){ if(e && e.clientX!=null) floatText(e.clientX, e.clientY, "logged off"); return sfx.no(); }
+  const now = performance.now();
+  if(now - lastPost < POST_GAP) return;
+  lastPost = now;
   const got = gain(S, "vibes", R.click, R.cap.vibes);
   S.stats.clicks++;
   sfx.post();
@@ -1670,7 +1677,7 @@ function onKey(e){
   if(typing && e.key!=="Enter") return; // a field keeps its keys
   if(arrow || e.key==="Enter") document.body.classList.add("kb");
   if(arrow){ e.preventDefault(); return navMove(arrow[0], arrow[1]); }
-  if(e.key==="Enter"){ e.preventDefault(); if(typing){ e.target.blur(); return; } return navPress(e.shiftKey); }
+  if(e.key==="Enter"){ e.preventDefault(); if(typing){ e.target.blur(); return; } if(e.repeat && navSel && navSel.id==="you-wrap") return; return navPress(e.shiftKey); } // posting is a press, not a hold (as with space)
   if(!S.started || modalOpen()) return;
   if(e.key===" "){ e.preventDefault(); if(document.activeElement && document.activeElement!==document.body) document.activeElement.blur(); if(!e.repeat) postFromKeys(); }
   else if(e.key==="m" || e.key==="M") memeIt(e.shiftKey ? 10 : 1);
