@@ -775,6 +775,7 @@ function openHelp(){
     '<p>catch the <b>💎 sparkles</b> when they show up.</p>'+
     '<p>much later you can <b>touch grass</b>: start over with grass 🌿 that makes everything faster, forever.</p>'+
     '<p class="note">the game keeps going while you\'re away (up to 8 hours). keys: space posts, m makes a meme.</p>'+
+    '<p>want something with more fight in it? <a href="https://cancel.tylerirl.com/">the cancel is coming</a> is this one\'s companion: a roguelite with the same miladys. your network keeps growing while you play it.</p>'+
     '<div class="row"><button class="btn small" data-close>got it</button></div>');
 }
 
@@ -889,6 +890,7 @@ async function init(){
   });
   document.addEventListener("visibilitychange", ()=>{ if(document.hidden) save(); else frame(); });
   window.addEventListener("pagehide", save);
+  document.querySelectorAll('a[href*="cancel.tylerirl.com"]').forEach(a=>a.addEventListener("click", save)); // off to the other game: save on the way out
 
   if(S.started){ catchUp(); startGame(); }
   else { show("screen-title"); drawYou(); }

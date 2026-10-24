@@ -52,6 +52,8 @@ html = swap(html, '<link rel="stylesheet" href="css/style.css">',
 html = swap(html, '<script src="js/data.js"></script>\n', "")
 html = swap(html, '<script src="js/fx.js"></script>\n', "")
 html = swap(html, '<script src="js/game.js"></script>', "<script>\n" + script + "\n</script>")
+sister = "assets/img/cancel.png"  # the companion game's badge, in the title screen and the header
+html = swap(html, 'src="%s"' % sister, 'src="%s"' % data_uri(sister))
 icon = "assets/icons/icon-192.png"
 html = swap(html, 'href="%s"' % icon, 'href="%s"' % data_uri(icon))
 

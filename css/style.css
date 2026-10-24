@@ -413,3 +413,21 @@ body.calm .res-row .rbar u,body.calm #log .ln,body.calm h1.game-title .is,body.c
 /* text over thin glass: a soft dark halo keeps it legible whatever is drifting past behind it */
 .box,.panel,#topbar,.hint{text-shadow:0 0 6px rgba(0,0,0,.9),0 1px 2px rgba(0,0,0,.8);}
 .btn.big:hover,.pick.on{text-shadow:none;}
+
+/* the way over to the companion game, cancel.tylerirl.com: its red, so it reads as the other place */
+.sister{display:flex;align-items:center;gap:12px;max-width:420px;margin:22px auto 0;padding:10px 14px;text-align:left;text-decoration:none;color:var(--txt);
+  border:1px solid rgba(255,85,85,.4);border-top-color:rgba(255,255,255,.15);border-radius:12px;background:rgba(40,0,6,.25);
+  backdrop-filter:blur(2.5px);-webkit-backdrop-filter:blur(2.5px);transition:var(--btn-t);}
+.sister:hover{border-color:var(--red);background:rgba(255,85,85,.1);box-shadow:0 0 24px rgba(255,85,85,.25);}
+.sister img{width:46px;height:46px;border-radius:50%;flex:none;box-shadow:0 0 0 2px rgba(255,85,85,.5);}
+.sister:hover img{animation:wobble .5s ease-in-out;}
+.sister span{display:flex;flex-direction:column;gap:3px;min-width:0;}
+.sister b{color:#ff8b8b;text-transform:lowercase;letter-spacing:.06em;}
+.sister i{font-style:normal;font-size:11px;color:#9aa6ab;line-height:1.45;}
+.sister em{font-style:normal;color:#ff8b8b;margin-left:auto;font-size:16px;}
+@keyframes wobble{30%{transform:rotate(-12deg) scale(1.08);}65%{transform:rotate(8deg);}}
+.sister-pill{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px 0 4px;margin-right:4px;border:1px solid rgba(255,85,85,.4);border-radius:var(--r);
+  color:#ff8b8b;text-decoration:none;font-size:12px;letter-spacing:.04em;text-transform:lowercase;transition:var(--btn-t);}
+.sister-pill:hover{border-color:var(--red);background:rgba(255,85,85,.1);box-shadow:0 0 16px rgba(255,85,85,.25);}
+.sister-pill img{width:24px;height:24px;border-radius:50%;}
+@media (max-width:820px){ .sister-pill span{display:none;} .sister-pill{padding:0 8px 0 4px;} }
