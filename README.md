@@ -29,6 +29,8 @@ It saves itself in your browser and keeps going while you're away (8 hours, or 2
 
 Sign in with **RemiliaNET** or **Urbit ID** (the same sign-in as [the cancel is coming](https://cancel.tylerirl.com), on the same service) and your network lives on your account: open it on a laptop, a desktop and a phone and it's the same one. It's sent up every minute and whenever you switch away, and each device keeps a copy so it opens straight away and plays on without a connection. If another device saved since, that one wins and this one picks up from it. The first time an account signs in, the network already in that browser moves onto it; signing out puts the browser back to its own.
 
+Settings come in two kinds. Sound, effects volume, the animated backdrop, calm, her face reacting, ambient mode and notifications belong to the device, so a phone that lags can run without the backdrop while the desktop keeps it; everything else (how numbers are written, wearing relics) goes with the network.
+
 Signed-in players are on the **boards**: fastest run to the infinite garden (challenges don't count), most grass earned, biggest network, and who turned on the new internet first.
 
 Saves can't be downloaded, pasted or loaded from a file any more, since that would let anyone put anything on the boards. The game runs in the browser, so nothing is proven, but the service holds every save against the last one it accepted: time played can't outrun the clock, counters only go up, runs have to take a plausible while and make plausible grass, and grass can't be spent that wasn't earned. A save that doesn't add up is refused and the device goes back to the last good one. Only runs started after an account was linked count on the boards.

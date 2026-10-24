@@ -696,3 +696,7 @@ a.vtag:hover b{text-decoration:underline;}
 /* ambient mode: the game steps aside for the network at work */
 #ambient{position:fixed;inset:0;width:100%;height:100%;z-index:135;display:block;cursor:none;}
 body.ambient .screen,body.ambient #post-fab,body.ambient .toasts,body.ambient #toasts,body.ambient .update-note,body.ambient #tip{opacity:0;pointer-events:none;transition:opacity 1.2s;}
+
+/* settings: what's this device's, and what's the network's */
+.set-h{font-family:var(--label);text-transform:uppercase;letter-spacing:.15em;font-size:.6rem;color:var(--neon);display:flex;justify-content:space-between;gap:8px;margin:16px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--line);}
+.set-h span{color:#666;letter-spacing:.08em;text-transform:none;font-size:.7rem;}

@@ -66,7 +66,7 @@ function fresh(keep){
   for(const r of RES){ s.res[r.id] = 0; s.seen[r.id] = 0; }
   for(const b of BUILDINGS) s.b[b.id] = 0;
   if(keep) Object.assign(s, keep);
-  return s;
+  return deviceSettings(s);
 }
 /* Signed out, the network lives in this browser (SAVE_KEY). Signed in, it lives on the account, and this browser keeps
    a copy of it under the account's id so it opens instantly and plays on with no connection. */
@@ -74,6 +74,21 @@ const slotKey = () => acct() ? SAVE_KEY+":"+acct().player : SAVE_KEY;
 function save(){
   if(!S) return;
   try{ localStorage.setItem(slotKey(), JSON.stringify(S)); }catch(e){}
+  keepDevice();
+}
+/* Some settings belong to the device, not the network: a phone that lags wants the backdrop off while the desktop
+   keeps it, and sound or the ambient screen are about where you are. Each device keeps its own and lays them over
+   whatever a save says, whichever device that save came from. A device that has never set them starts from the
+   network's. */
+const DEVICE_KEY = "network-device", DEVICE_SETTINGS = ["mute", "vol", "bg", "calm", "faces", "ambient", "notifyOn", "notify"];
+function deviceSettings(s){
+  let d = null; try{ d = JSON.parse(localStorage.getItem(DEVICE_KEY)); }catch(e){}
+  if(d && s && s.settings) for(const k of DEVICE_SETTINGS) if(k in d) s.settings[k] = d[k];
+  return s;
+}
+function keepDevice(){
+  const d = {}; for(const k of DEVICE_SETTINGS) if(S.settings[k]!==undefined) d[k] = S.settings[k];
+  try{ localStorage.setItem(DEVICE_KEY, JSON.stringify(d)); }catch(e){}
 }
 function load(){
   try{
@@ -95,7 +110,7 @@ function migrate(s){ // fill in anything a newer version added
   for(const k of ["res","seen","b","timers","stats","settings","run","nn","auto"]) s[k] = Object.assign({}, base[k], s[k]);
   s.settings.notify = Object.assign({}, base.settings.notify, s.settings.notify);
   s.run.auto = Object.assign({}, base.run.auto, s.run.auto);
-  return s;
+  return deviceSettings(s);
 }
 
 const netName = () => "the network"; // networks used to take a name; not any more (anyone could put anything there)
@@ -1472,19 +1487,21 @@ function closeModal(){ $("modal").classList.add("hidden"); if(navSel && !documen
 function openSettings(){
   openModal('<h2>settings</h2>'+
     '<div class="acct-row" id="acct-set"></div>'+
+    '<div class="set-h">on this device <span>'+(acct() ? "your other devices keep their own" : "")+'</span></div>'+
     '<div class="set-row"><span>sound</span><button class="tog'+(S.settings.mute ? "" : " on")+'" id="set-mute">'+(S.settings.mute ? "off" : "on")+'</button></div>'+
-    '<div class="set-row"><span>animated backdrop</span><button class="tog'+(S.settings.bg!==false ? " on" : "")+'" id="set-bg">'+(S.settings.bg!==false ? "on" : "off")+'</button></div>'+
-    '<div class="set-row"><span>calm (less motion)</span><button class="tog'+(S.settings.calm ? " on" : "")+'" id="set-calm">'+(S.settings.calm ? "on" : "off")+'</button></div>'+
-    '<div class="set-row"><span>numbers</span><span class="seg">'+Object.keys(NOTATIONS).map(k=>'<button class="pick'+((S.settings.num||"short")===k ? " on" : "")+'" data-num="'+k+'">'+NOTATIONS[k]+'</button>').join("")+'</span></div>'+
-    '<div class="set-row"><span>your milady</span><button class="btn small" id="set-reroll">reroll her</button></div>'+
     '<div class="set-row"><span>effects volume</span><input id="set-vol" type="range" min="0" max="100" value="'+(S.settings.vol!=null ? S.settings.vol : 70)+'"></div>'+
-    '<div class="set-row"><span>📺 ambient mode, when nobody\'s touched anything for</span><span class="seg">'+Object.keys(AMBIENT_AFTER).map(k=>'<button class="pick'+((S.settings.ambient||"3")===k ? " on" : "")+'" data-amb="'+k+'">'+(k==="off" ? "never" : k+" min")+'</button>').join("")+'</span></div>'+
+    '<div class="set-row"><span>animated backdrop<br><span class="note">off is lighter, for a phone that lags</span></span><button class="tog'+(S.settings.bg!==false ? " on" : "")+'" id="set-bg">'+(S.settings.bg!==false ? "on" : "off")+'</button></div>'+
+    '<div class="set-row"><span>calm (less motion)</span><button class="tog'+(S.settings.calm ? " on" : "")+'" id="set-calm">'+(S.settings.calm ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>her face reacts</span><button class="tog'+(S.settings.faces!==false ? " on" : "")+'" id="set-faces">'+(S.settings.faces!==false ? "on" : "off")+'</button></div>'+
-    '<div class="set-row"><span>wear your relics</span><button class="tog'+(S.settings.wear!==false ? " on" : "")+'" id="set-wear">'+(S.settings.wear!==false ? "on" : "off")+'</button></div>'+
+    '<div class="set-row"><span>📺 ambient mode, when nobody\'s touched anything for</span><span class="seg">'+Object.keys(AMBIENT_AFTER).map(k=>'<button class="pick'+((S.settings.ambient||"3")===k ? " on" : "")+'" data-amb="'+k+'">'+(k==="off" ? "never" : k+" min")+'</button>').join("")+'</span></div>'+
     '<div class="set-row"><span>notifications<br><span class="note">only while the game\'s in a background tab</span></span><button class="tog'+(S.settings.notifyOn ? " on" : "")+'" id="set-notify">'+(S.settings.notifyOn ? "on" : "off")+'</button></div>'+
     (S.settings.notifyOn ? '<div class="set-row notify-kinds">'+Object.keys(NOTIFY_WHAT).map(k=>'<button class="tog'+(S.settings.notify[k] ? " on" : "")+'" data-notify="'+k+'">'+NOTIFY_WHAT[k]+'</button>').join("")+'</div>' : "")+
     (standalone() ? "" : '<div class="set-row"><span>install it as an app</span>'+(installPrompt ? '<button class="btn small" id="set-install">install</button>' : '<span class="note">'+(/iphone|ipad/i.test(navigator.userAgent) ? "in safari: share → add to home screen" : "use your browser's install button")+'</span>')+'</div>')+
     (window.caches && !window.INLINE_FILES ? '<div class="set-row"><span>keep every picture, to play offline (about 11 MB)</span><button class="btn small" id="set-offline">'+(offlineState==="done" ? "kept ✓" : offlineState==="busy" ? "keeping…" : "keep them")+'</button></div>' : "")+
+    '<div class="set-h">'+(acct() ? "everywhere you play" : "your network")+'</div>'+
+    '<div class="set-row"><span>numbers</span><span class="seg">'+Object.keys(NOTATIONS).map(k=>'<button class="pick'+((S.settings.num||"short")===k ? " on" : "")+'" data-num="'+k+'">'+NOTATIONS[k]+'</button>').join("")+'</span></div>'+
+    '<div class="set-row"><span>wear your relics</span><button class="tog'+(S.settings.wear!==false ? " on" : "")+'" id="set-wear">'+(S.settings.wear!==false ? "on" : "off")+'</button></div>'+
+    '<div class="set-row"><span>your milady</span><button class="btn small" id="set-reroll">reroll her</button></div>'+
     (acct() ? "" : '<div class="set-row"><span>start over, for real</span><button class="btn small danger" id="set-wipe">wipe this device</button></div>')+
     '<p class="note">'+(acct() ? "your network is kept on your account, and saved there every minute. sign in anywhere to pick it up." : "the game saves itself every few seconds, in this browser. sign in to keep it on your account and play it on any device.")+'</p>'+
     '<div class="row"><button class="btn small" data-close>close</button></div>');
