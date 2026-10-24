@@ -59,6 +59,7 @@ function fresh(keep){
     auto:{ build:true, tech:true, up:true, meme:true, keep:0.25, skip:{} },
     grass:0, perks:{}, ach:{}, relics:{}, chDone:{}, challenge:null,
     cd:{}, raids:[], wonder:0, autoJob:"poster", seenNew:{}, history:[], born:Date.now(),
+    who:{ kind:"milady", token:null, eye:"" }, // who you are: a milady or a remilio, rolled or a token by its number (S.you is the layers)
     stats:{ clicks:0, sparkles:0, resets:0, played:0, made:{}, rituals:0, raids:0, cancels:0, cycles:0 },
     you:null, settings:{ mute:false, bg:true, calm:!!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches),
       notifyOn:false, notify:{ raid:true, ritual:true, full:false, grass:true, nn:true } }, log:[], started:false,
@@ -357,8 +358,8 @@ function pay(s, c){ for(const k in c) s.res[k] = Math.max(0, s.res[k]-c[k]); }
 /* ---------- miladys (and, once the network has its spirituality, remilios) ---------- */
 const KINDS = {
   milady: { cfg:"Milady", w:600, h:750, crop:[40, 20, 520],
-    order:["Background","Skin","Face","Eyes","Mouth","Necklaces","Shirt","Hair","Brows","Earrings","Face Decoration","Glasses","Hat"],
-    odds:{ Face:0.6, Necklaces:0.3, "Face Decoration":0.2, Earrings:0.3, Glasses:0.3, Hat:0.4 } },
+    order:["Background","Skin","Face","Eyes","Mouth","Neck","Necklaces","Shirt","Hair","Brows","Earrings","Face Decoration","Glasses","Hat"],
+    odds:{ Face:0.6, Neck:0.08, Necklaces:0.3, "Face Decoration":0.2, Earrings:0.3, Glasses:0.3, Hat:0.4 } },
   remilio: { cfg:"Remilio", w:600, h:600, crop:[60, 0, 480],
     order:["Background","Race","Brows","Eyes","Hair","Face","Shirt","Mouth","Costume","Earrings","Glasses","Hat","Weapon","Friend"],
     odds:{ Costume:0.2, Mouth:0.6, Face:0.3, Earrings:0.3, Glasses:0.3, Hat:0.4, Friend:0.3, Weapon:0.25 } },
@@ -371,7 +372,58 @@ function rollLook(kind){
     if(files.length && (K.odds[layer]==null || rnd()<K.odds[layer])) look[layer] = choice(files);
   }
   if(look.Costume) for(const l of ["Shirt","Hat","Glasses","Hair","Face"]) delete look[l]; // a costume is the whole outfit, hood and all
+  const M = TOKEN_MAP[kind||"milady"]; // and whatever the collection hides under something else (a strawberry hat has no hair showing)
+  for(const layer in M.exclusions){ const v = look[layer] && look[layer].slice(0, -5); for(const gone of (M.exclusions[layer][v]||[])) delete look[gone]; }
   return look;
+}
+/* a token's traits ([[trait, value], …]) as layers, the way the cancel is coming reads them. Null if it has no body. */
+function tokenLayers(kind, attrs){
+  const M = TOKEN_MAP[kind], K = KINDS[kind], files = ASSETS[M.cfg], layers = {};
+  const title = v => v.split(" ").map(w=>w ? w[0].toUpperCase()+w.slice(1) : w).join(" ");
+  let eye = "";
+  for(const [trait, value] of attrs){
+    const layer = M.names[trait] || trait;
+    const want = (M.values[trait]||{})[value] || (M.transform==="titlecase" ? title(value) : value);
+    if(M.tint && layer===M.tint.by){ eye = want; continue; }
+    if(layer==="Background" || !K.order.includes(layer) || !files[layer]) continue; // backgrounds, overlays and scores aren't worn
+    const f = files[layer].find(x=>x.toLowerCase()===(want+".webp").toLowerCase());
+    if(f) layers[layer] = f;
+  }
+  for(const layer in M.exclusions){ const v = layers[layer] && layers[layer].slice(0, -5); for(const gone of (M.exclusions[layer][v]||[])) delete layers[gone]; }
+  for(const layer in M.layerExclusions) if(layers[layer]) for(const gone of M.layerExclusions[layer]) delete layers[gone];
+  return layers[M.body] ? { layers, eye:(files[M.tint ? M.tint.by : ""]||[]).includes(eye+".webp") ? eye : "" } : null;
+}
+/* a Milady's eye color, as the maker does it: inside the eye mask, each pixel keeps its lightness and takes the color's
+   hue and saturation (the same as the cancel is coming) */
+function rgb2hsl(r, g, b){
+  r/=255; g/=255; b/=255;
+  const mx = Math.max(r,g,b), mn = Math.min(r,g,b), l = (mx+mn)/2, d = mx-mn;
+  let h = 0, s = 0;
+  if(d){ s = d/(1-Math.abs(2*l-1)); h = mx===r ? ((g-b)/d)%6 : mx===g ? (b-r)/d+2 : (r-g)/d+4; h *= 60; if(h<0) h += 360; }
+  return [h, s*100, l*100];
+}
+function hsl2rgb(h, s, l){
+  s/=100; l/=100;
+  const k = n => (n+h/30)%12, a = s*Math.min(l,1-l), f = n => l-a*Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
+  return [255*f(0), 255*f(8), 255*f(4)];
+}
+function tintEyes(cx, mask, swatch, darken){
+  const W = 600, Y = 180, H = 320; // the eyes sit in this band
+  const t = document.createElement("canvas"); t.width = W; t.height = 750;
+  const tx = t.getContext("2d", { willReadFrequently:true });
+  tx.drawImage(swatch, 0, 0, W, 750);
+  const c = tx.getImageData(300, 375, 1, 1).data, [th, ts] = rgb2hsl(c[0], c[1], c[2]);
+  tx.clearRect(0, 0, W, 750); tx.drawImage(mask, 0, 0, W, 750);
+  const m = tx.getImageData(0, Y, W, H), e = cx.getImageData(0, Y, W, H), md = m.data, ed = e.data;
+  for(let i=0; i<md.length; i+=4){
+    if(md[i+3] < 128 || md[i]+md[i+1]+md[i+2] < 180){ md[i+3] = 0; continue; } // black or empty: not the iris
+    let l = rgb2hsl(ed[i], ed[i+1], ed[i+2])[2];
+    if(darken) l = l < 5 ? 5 : l*darken;
+    const [r, g, b] = hsl2rgb(th, ts, l);
+    md[i] = r; md[i+1] = g; md[i+2] = b; md[i+3] = 255;
+  }
+  tx.clearRect(0, 0, W, 750); tx.putImageData(m, 0, Y);
+  cx.drawImage(t, 0, 0);
 }
 function newMilady(s, R){
   const remilio = resets(s) >= 2 && rnd() < (s.perks.blessing ? 0.5 : 0.25);
@@ -407,9 +459,16 @@ function compose(look, noBg, kind){
   return lookCache[key] = (async ()=>{
     const layers = K.order.filter(l=>look[l] && !(noBg && l==="Background"));
     const ims = await Promise.all(layers.map(l=>loadImg("assets/img/"+K.cfg+"/"+l+"/"+look[l]).catch(()=>null)));
+    // a token's eye color, on the eyes that have a mask for it
+    const T = TOKEN_MAP.milady.tint, eyes = look.Eyes && look.Eyes.slice(0, -5);
+    const tint = K.cfg==="Milady" && look._eye && T.values.includes(eyes)
+      ? await Promise.all([loadImg("assets/img/Milady/"+T.mask+"/"+look.Eyes), loadImg("assets/img/Milady/"+T.by+"/"+look._eye+".webp")]).catch(()=>null) : null;
     const cv = document.createElement("canvas"); cv.width = K.w; cv.height = K.h;
-    const cx = cv.getContext("2d");
-    for(const im of ims) if(im) cx.drawImage(im, 0, 0, K.w, K.h);
+    const cx = cv.getContext("2d", { willReadFrequently:!!tint });
+    ims.forEach((im, i)=>{
+      if(im) cx.drawImage(im, 0, 0, K.w, K.h);
+      if(tint && layers[i]==="Eyes") try{ tintEyes(cx, tint[0], tint[1], T.darken[look._eye]||0); }catch(e){}
+    });
     return cv;
   })();
 }
@@ -585,7 +644,7 @@ function touchGrass(into){
     if(met) done[S.challenge] = true;
     const history = (S.history||[]).concat({ n:resets(S)+1, t:S.runT, cycles:S.cycle, peak:S.run.peak||S.miladys.length, grass:g,
       challenge:S.challenge, beaten:!!met, end:Date.now() }).slice(-50);
-    const keep = { grass:S.grass+g, perks:S.perks, ach:S.ach, you:S.you, settings:S.settings, started:true, relics:S.relics, chDone:done,
+    const keep = { grass:S.grass+g, perks:S.perks, ach:S.ach, you:S.you, who:S.who, settings:S.settings, started:true, relics:S.relics, chDone:done,
       challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, history, born:S.born,
       nn:S.nn, auto:S.auto, ended:S.ended, endSeen:S.endSeen, stats:Object.assign(S.stats, { resets:S.stats.resets+1 }), log:[], nextId:S.nextId };
     S = fresh(keep);
@@ -1501,7 +1560,7 @@ function openSettings(){
     '<div class="set-h">'+(acct() ? "everywhere you play" : "your network")+'</div>'+
     '<div class="set-row"><span>numbers</span><span class="seg">'+Object.keys(NOTATIONS).map(k=>'<button class="pick'+((S.settings.num||"short")===k ? " on" : "")+'" data-num="'+k+'">'+NOTATIONS[k]+'</button>').join("")+'</span></div>'+
     '<div class="set-row"><span>wear your relics</span><button class="tog'+(S.settings.wear!==false ? " on" : "")+'" id="set-wear">'+(S.settings.wear!==false ? "on" : "off")+'</button></div>'+
-    '<div class="set-row"><span>your milady</span><button class="btn small" id="set-reroll">reroll her</button></div>'+
+    '<div class="set-row who-set"><span>who you are</span><div class="who-row" id="who-set"></div></div>'+
     (acct() ? "" : '<div class="set-row"><span>start over, for real</span><button class="btn small danger" id="set-wipe">wipe this device</button></div>')+
     '<p class="note">'+(acct() ? "your network is kept on your account, and saved there every minute. sign in anywhere to pick it up." : "the game saves itself every few seconds, in this browser. sign in to keep it on your account and play it on any device.")+'</p>'+
     '<div class="row"><button class="btn small" data-close>close</button></div>');
@@ -1509,7 +1568,7 @@ function openSettings(){
   $("set-bg").onclick = ()=>{ S.settings.bg = S.settings.bg===false; syncLook(); openSettings(); };
   $("set-calm").onclick = ()=>{ S.settings.calm = !S.settings.calm; syncLook(); openSettings(); };
   document.querySelectorAll("#modal [data-num]").forEach(b=>b.onclick = ()=>{ S.settings.num = b.dataset.num; refresh(true); renderLog(); openSettings(); });
-  $("set-reroll").onclick = ()=>{ S.you = rollLook(); drawYou(); };
+  whoControls($("who-set"));
   $("set-vol").oninput = e=>{ S.settings.vol = +e.target.value; };
   $("set-vol").onchange = ()=>sfx.post();
   $("set-wear").onclick = ()=>{ S.settings.wear = S.settings.wear===false; drawYou(); openSettings(); };
@@ -1554,9 +1613,11 @@ function openHelp(){
 
 /* ---------- you ---------- */
 /* your milady puts on the relics you hold: one per slot, the highest level wins */
+const youKind = () => (S && S.who && S.who.kind) || "milady";
 function youLook(){
   const look = Object.assign({}, S.you);
-  if(S.settings.wear===false) return look;
+  if(S.who && S.who.eye) look._eye = S.who.eye;
+  if(S.settings.wear===false || youKind()!=="milady") return look; // relics are milady art: a remilio wears her own things
   const best = {};
   for(const r of RELICS){ const lv = S.relics[r.id]||0; if(lv && r.wear && (!best[r.wear[0]] || lv > best[r.wear[0]].lv)) best[r.wear[0]] = { lv, file:r.wear[1] }; }
   for(const slot in best) look[slot] = best[slot].file;
@@ -1586,6 +1647,27 @@ const FACES = {
   sleepy: { Eyes:"Sleepy.webp", Mouth:"Flat.webp", pri:0 },  // a mood: nobody's posted in a while
   asleep: { Eyes:"Closed.webp", Mouth:"3.webp", pri:0 },
 };
+/* a remilio's faces, from the remilio layers (TIRED: the tired eyes nearest her own color). It only changes layers she
+   has (a zombie has no eyes to swap), and no blush goes under a costume. A remilio has no closed eyes, so no blink. */
+const FACES_REMILIO = {
+  full:   { Brows:"Sad.webp" },
+  buy:    { Mouth:"Smug.webp" },
+  big:    { Eyes:"Stars.webp", Mouth:"Smug.webp" },
+  study:  { Eyes:"Void.webp", Brows:"Notched.webp" },
+  pray:   { Eyes:"TIRED" },
+  smug:   { Mouth:"Smug.webp" },
+  hype:   { Eyes:"Stars.webp", Mouth:"Troll.webp" },
+  worry:  { Eyes:"Tears.webp", Brows:"Sad.webp" },
+  sad:    { Eyes:"Tears.webp", Brows:"Sad.webp" },
+  drama:  { Eyes:"Tears.webp", Brows:"Sad.webp", Face:"Angry.webp" },
+  shiny:  { Eyes:"Stars.webp", Face:"Blush.webp" },
+  calm:   { Eyes:"TIRED", Face:"Blush.webp" },
+  love:   { Eyes:"Stars.webp", Face:"Blush Heart.webp" },
+  frenzy: { Eyes:"Meth.webp" },
+  sleepy: { Eyes:"TIRED" },
+  asleep: { Eyes:"TIRED", Brows:"Sad.webp" },
+};
+const tiredEyes = e => /Light Blue|Blue/.test(e||"") ? "Tired Light Blue.webp" : /Green/.test(e||"") ? "Tired Green.webp" : "Tired Brown.webp";
 const FACE_LAYERS = ["Eyes", "Mouth", "Brows", "Face"];
 let face = null, faceUntil = 0, faceMood = "", faceNow = "", faceSeq = 0, lastTouch = Date.now(), nextBlink = 0;
 const facesOn = () => S && S.settings.faces!==false;
@@ -1599,7 +1681,13 @@ function react(name){
 function faceLook(){
   const look = youLook();
   if(!facesOn()) return look;
-  const now = performance.now(), f = FACES[face && now < faceUntil ? face : faceMood];
+  const now = performance.now(), name = face && now < faceUntil ? face : faceMood;
+  if(youKind()==="remilio"){
+    const f = FACES_REMILIO[name];
+    if(f) for(const l of FACE_LAYERS) if(f[l] && (look[l] || (l==="Face" && !look.Costume))) look[l] = f[l]==="TIRED" ? tiredEyes(look.Eyes) : f[l];
+    return look;
+  }
+  const f = FACES[name];
   if(f) for(const l of FACE_LAYERS) if(f[l]) look[l] = f[l];
   return look;
 }
@@ -1615,15 +1703,73 @@ function faceTick(){
   if(key !== faceNow){ faceNow = key; drawYou(); }
 }
 async function drawYou(){
-  const seq = ++faceSeq, cv = await compose(faceLook(), true);
+  const kind = youKind(), seq = ++faceSeq, cv = await compose(faceLook(), true, kind);
   if(seq !== faceSeq) return; // a newer face was asked for while this one was being put together
   for(const id of ["you", "title-you", "fab-you"]){
     const c = $(id); if(!c) continue;
-    const cx = c.getContext("2d"); cx.clearRect(0, 0, 600, 750); cx.drawImage(cv, 0, 0);
+    const cx = c.getContext("2d"); cx.clearRect(0, 0, 600, 750);
+    if(kind==="remilio") cx.drawImage(cv, -70, -32, 762, 762); // square, with a smaller head: fitted to the portrait the way the cancel is coming does
+    else cx.drawImage(cv, 0, 0);
   }
 }
 function warmFaces(){ // every face she can make, loaded ahead so the first of each isn't late
-  for(const f of Object.values(FACES)) for(const l of FACE_LAYERS) if(f[l]) loadImg("assets/img/Milady/"+l+"/"+f[l]).catch(()=>{});
+  const rem = youKind()==="remilio";
+  for(const f of Object.values(rem ? FACES_REMILIO : FACES)) for(const l of FACE_LAYERS) if(f[l])
+    loadImg("assets/img/"+(rem ? "Remilio" : "Milady")+"/"+l+"/"+(f[l]==="TIRED" ? tiredEyes(S.you.Eyes) : f[l])).catch(()=>{});
+}
+
+/* ---------- who you are: as on the cancel is coming's character screen ----------
+   Milady or Remilio, made from the trait files (reroll), or a token by its number, rebuilt from its traits; or
+   Radbro, who is one Remilio and nothing to choose. The character follows the number as it's typed. */
+const isRadbro = t => !!t && t.kind===RADBRO_TOKEN.kind && +t.id===RADBRO_TOKEN.id;
+let whoTok = 0;
+const whoLabel = () => isRadbro(S.who.token) ? "radbro" : S.who.token ? S.who.kind+" #"+S.who.token.id : "a "+S.who.kind+" of your own";
+function whoControls(box){
+  if(!box) return;
+  const w = S.who, rad = isRadbro(w.token);
+  box.innerHTML = '<select class="name-in" data-who="kind" aria-label="collection">'+["milady","remilio","radbro"].map(k=>'<option value="'+k+'">'+k+'</option>').join("")+'</select>'+
+    '<input class="name-in who-id'+(rad ? " hidden" : "")+'" data-who="id" type="number" min="0" max="9999" inputmode="numeric" placeholder="token #" aria-label="token number" value="'+(w.token && !rad ? w.token.id : "")+'">'+
+    '<button class="btn small" data-who="roll"'+(rad ? " disabled" : "")+'>🎲 reroll</button>'+
+    '<span class="note who-msg">'+esc(whoLabel())+'</span>';
+  const kind = box.querySelector('[data-who="kind"]'), id = box.querySelector('[data-who="id"]'), msg = box.querySelector(".who-msg");
+  kind.value = rad ? "radbro" : w.kind;
+  let t = 0;
+  const useId = ()=>{ clearTimeout(t); const n = parseInt(id.value, 10);
+    if(kind.value==="radbro") return; // the number box sits out: radbro is one remilio (its change can fire after the switch)
+    if(/^\d+$/.test(id.value.trim()) && n>=0 && n<=9999 && !(S.who.token && S.who.token.kind===kind.value && +S.who.token.id===n)) loadWho({ kind:kind.value, id:n }, msg); };
+  id.oninput = ()=>{ clearTimeout(t); t = setTimeout(useId, 380); }; // a beat after the last keystroke
+  id.onchange = useId;
+  kind.onchange = ()=>{
+    const rad = kind.value==="radbro";
+    id.classList.toggle("hidden", rad); box.querySelector('[data-who="roll"]').disabled = rad;
+    if(rad) return loadWho(RADBRO_TOKEN, msg);
+    if(id.value.trim()) return useId();
+    if(kind.value!==S.who.kind || S.who.token) rollWho(kind.value, msg);
+  };
+  box.querySelector('[data-who="roll"]').onclick = ()=>{ if(kind.value==="radbro") return; id.value = ""; rollWho(kind.value, msg); };
+}
+function rollWho(kind, msg){
+  whoTok++;
+  S.you = rollLook(kind); S.who = { kind, token:null, eye:"" };
+  if(msg) msg.textContent = whoLabel();
+  whoChanged();
+}
+async function loadWho(tok, msg){
+  const t = ++whoTok, label = isRadbro(tok) ? "radbro" : tok.kind+" #"+tok.id;
+  if(!online()){ if(msg) msg.textContent = "tokens load from the service, which this copy can't reach"; return; }
+  if(msg) msg.textContent = "loading "+label+"…";
+  const r = await api("/api/token?kind="+tok.kind+"&id="+tok.id, null, { ms:12000 });
+  if(t!==whoTok) return; // something newer was asked for meanwhile
+  const tk = r.status===200 && r.data && Array.isArray(r.data.attributes) ? tokenLayers(tok.kind, r.data.attributes) : null;
+  if(!tk){ if(msg) msg.textContent = r.status===429 ? "that's a lot of lookups. try again in a bit" : "couldn't load "+label+": check the number and your connection"; return; }
+  S.you = tk.layers; S.who = { kind:tok.kind, token:{ kind:tok.kind, id:tok.id }, eye:tk.eye };
+  if(msg) msg.textContent = "playing as "+label;
+  whoChanged();
+}
+function whoChanged(){
+  wornNow = ""; faceNow = ""; face = null; warmFaces(); drawYou(); save();
+  document.querySelectorAll(".who-msg").forEach(m=>m.textContent = m.textContent.startsWith("loading") || m.textContent.startsWith("couldn") ? m.textContent : whoLabel());
+  const c = $("title-you"); if(c){ c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop"); }
 }
 
 /* ---------- time away ---------- */
@@ -2157,7 +2303,7 @@ async function init(){
   document.querySelectorAll(".fs").forEach(b=>b.onclick = ()=>{
     if(document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(()=>{});
   });
-  $("title-reroll").onclick = ()=>{ S.you = rollLook(); drawYou(); const c = $("title-you"); c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop"); };
+  whoControls($("who-title"));
   $("btn-logon").onclick = ()=>{ S.started = true; S.last = Date.now(); save(); startGame(); };
   document.addEventListener("keydown", onKey);
   document.addEventListener("visibilitychange", ()=>{ if(document.hidden){ save(); syncUp(true); } else { raidBack = false; if(S.started && awaySnap){ catchUp(false); refresh(true); } frame(); setTitle(); } });

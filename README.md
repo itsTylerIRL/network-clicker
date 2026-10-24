@@ -8,6 +8,10 @@ A neochibi idle clicker. Post. Build the network. Touch grass.
 
 You start alone, posting. Click your Milady and she posts, and posting makes vibes. Turn vibes into memes, build a group chat out of them, and someone shows up. Then someone else. Before long it's a network, and a network needs feeding.
 
+## Who you are
+
+As on [the cancel is coming](https://cancel.tylerirl.com)'s character screen: pick **Milady** or **Remilio** and reroll one from the trait files, or type a token's number and it's rebuilt from that token's own traits (read through the cancel's service, by the same rules, eye color and all). **Radbro** is one Remilio, #2305, and nothing to choose. It's on the title screen and in settings. A Remilio's face reacts from the Remilio layers; relics are Milady art, so only a Milady wears them.
+
 ## How it plays
 
 - **Post.** Click yourself (or press space). That's the clicker part, and early on it's the whole game.

@@ -702,3 +702,9 @@ body.ambient .screen,body.ambient #post-fab,body.ambient .toasts,body.ambient #t
 /* settings: what's this device's, and what's the network's */
 .set-h{font-family:var(--label);text-transform:uppercase;letter-spacing:.15em;font-size:.6rem;color:var(--neon);display:flex;justify-content:space-between;gap:8px;margin:16px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--line);}
 .set-h span{color:#666;letter-spacing:.08em;text-transform:none;font-size:.7rem;}
+
+/* who you are: collection, token number, reroll */
+.who-row{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;}
+.who-row select{padding:6px 8px;} .who-row .who-id{width:96px;}
+.who-row .who-msg{flex-basis:100%;text-align:center;}
+.set-row.who-set{flex-wrap:wrap;} .set-row.who-set .who-row{justify-content:flex-end;} .set-row.who-set .who-msg{text-align:right;}

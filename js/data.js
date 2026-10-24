@@ -33,6 +33,22 @@ const RES = [
   { id:"ether",   name:"ether",    icon:"💠", color:"#c3a6ff", cap:25,  desc:"what the cathedral is made of. seers find it.", tech:"hyperreality", ng:4 },
 ];
 
+/* Playing as a token: its traits (read through the cancel game's service) rebuilt in layers, by the same rules as the
+   cancel is coming. names/values map a collection's trait names onto the layer folders; exclusions are what the
+   collection itself hides under something else; tint is how a Milady's Eye Color colors her eyes. */
+const TOKEN_MAP = {
+ milady: { cfg:"Milady", body:"Skin", transform:"titlecase",
+   names:{"Race":"Skin", "Necklace":"Necklaces", "Eyebrows":"Brows", "Earring":"Earrings"},
+   values:{"Race":{"clay":"Clay", "pale":"Pale", "tan":"Tan", "black":"Black", "pink":"Pink", "alien":"Alien"}, "Eyes":{"heart eyes":"Heart"}, "Hair":{"og black":"OG Black", "og blonde":"OG Blonde", "og blue":"OG Blue", "og frosted blonde":"OG Frosted Blonde", "og frosted purple":"OG Frosted Purple", "og green":"OG Green", "og orange":"OG Orange", "og slate":"OG Slate"}, "Hat":{"denim usa cap":"Denim USA Cap", "cat ears with bell":"Cat Ears with Bell"}, "Shirt":{"mwo shirt":"MWO Shirt", "sweater and tie":"Sweater and Tie"}, "Necklace":{"eth necklace":"ETH Necklace", "pearl necklace":"Mestwood Pearl Necklace"}, "Glasses":{"yy glasses":"YY Glasses"}, "Mouth":{"smile":"Smile A", "smileb":"Smile B", "smilec":"Smile C"}, "Eyebrows":{"complacent":"Complacent A", "complacentb":"Complacent B", "concerneda":"Concerned A", "concernedb":"Concerned B", "concernedc":"Concerned C"}},
+   exclusions:{"Hat":{"Strawberry Hat":["Hair", "Earrings"]}, "Eyes":{"Chinese":["Brows"]}}, layerExclusions:{},
+   tint:{ by:"Eye Color", mask:"Eyes-Mask", values:["Classic", "Crying", "Dilated", "Heart", "Sleepy", "Sparkle", "Teary"], darken:{Brown:0.47, Leaf:0.28, Blue:0.8, Gold:0.7} } },
+ remilio: { cfg:"Remilio", body:"Race", transform:"none",
+   names:{"Overlays":"Overlay", "Eyebrow":"Brows"},
+   values:{"Hair":{"Ulenka Golden Painted":"Ulenka Golden"}, "Glasses":{"Cobain":"Clout Goggles"}},
+   exclusions:{"Race":{"Oni Dark":["Hair", "Hat"], "Oni Light":["Hair", "Hat"], "Alien":["Eyes"], "Reptilian":["Eyes"], "Zombie":["Eyes"]}, "Hat":{"Strawberry Hat":["Earrings"]}, "Eyes":{"Southpark":["Brows"]}}, layerExclusions:{"Costume":["Shirt", "Hat", "Glasses", "Hair", "Face"]} },
+};
+const RADBRO_TOKEN = { kind:"remilio", id:2305 }; // "Radbro" is this one Remilio, as on the cancel's character screen: nothing to choose
+
 const EAT = 0.5; // vibes per second, per milady at home (one away on a raid eats elsewhere)
 
 const JOBS = [

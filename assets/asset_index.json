@@ -308,6 +308,31 @@
    "Varsity Cap.webp",
    "White Cowboy Hat.webp",
    "Workin Cap.webp"
+  ],
+  "Eye Color": [
+   "Aqua.webp",
+   "Blue.webp",
+   "Brown.webp",
+   "Gold.webp",
+   "Green.webp",
+   "Grey.webp",
+   "Leaf.webp",
+   "Lilac.webp"
+  ],
+  "Eyes-Mask": [
+   "Classic.webp",
+   "Crying.webp",
+   "Dilated.webp",
+   "Heart.webp",
+   "Sleepy.webp",
+   "Sparkle.webp",
+   "Teary.webp"
+  ],
+  "Neck": [
+   "Anime Chest Tattoo.webp",
+   "Castle Neck Tattoo.webp",
+   "Lean Neck Tattoo.webp",
+   "Spider Neck Tattoo.webp"
   ]
  },
  "Remilio": {
