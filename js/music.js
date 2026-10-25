@@ -18,10 +18,10 @@ const MUSIC = (()=>{
   };
   const STEPS = 16; // a chord, in sixteenths
   let out = null, wet = null, padIn = null, padLp = null, trem = null, noise = null, timer = null, playing = false;
-  let bar = 0, step = 0, stepAt = 0, cur = null; // cur: the chord being played out (phase, mood, root, tones, length)
+  let bar = 0, step = 0, stepAt = 0, cur = null, quick = false; // cur: the chord being played out; quick: the next comes in fast (the market turned)
   const vol = () => (S && S.settings.music!=null ? S.settings.music : 40)/100;
   const wanted = () => !!S && !S.settings.mute && vol() > 0 && !document.hidden && !!AC;
-  const phaseId = () => (R && R.phase && MOOD[R.phase.id]) ? R.phase.id : "accum";
+  const phaseId = () => { const p = S && S.started ? phase(S) : null; return p && MOOD[p.id] ? p.id : "accum"; }; // straight from the game, not the last page refresh
   function setup(){
     out = AC.createGain(); out.gain.value = 0; out.connect(AC.destination);
     // a room: a reverb made of decaying noise, and an echo for the notes
@@ -87,16 +87,19 @@ const MUSIC = (()=>{
   }
   function startBar(at, md){
     const ph = phaseId(), m = MOOD[ph], root = (POST_ROOT[ph]||523)/4, chord = CH[m.prog[bar % m.prog.length]].slice(), len = m.bar;
-    cur = { ph, m, root, chord, len, at };
+    // the chord's own level, so it can be let go of early when the market turns
+    const bus = AC.createGain(); bus.connect(padIn);
+    cur = { ph, m, root, chord, len, at, bus };
+    const pa = quick ? 0.5 : 2.2, ba = quick ? 0.25 : 1.2; quick = false; // after a turn it swells in fast, crossing the old one going out
     echoTime(len);
     const spread = md.drama ? 18 : 4; // drama pulls the two voices of each tone apart: seasick
     const tones = md.glow ? chord.concat([chord[0]*9/4]) : chord; // a glow adds the ninth: warmer, wider
     for(const r of tones) for(const det of [-spread, spread])
-      tone(det < 0 ? "sine" : "triangle", root*r*Math.pow(2, det/1200), at, len + 2.5, 0.022, 2.2, 6000, null, { bus:padIn });
-    tone("sine", root*chord[0]/2, at, len + 1, 0.05, 1.2, 400, wet.verb); // the bass, under it
-    if(md.drama) tone("sawtooth", root*chord[0]/2*Math.SQRT2, at, len + 1, 0.012, 2.5, 260, wet.verb); // and a tritone, darker still
+      tone(det < 0 ? "sine" : "triangle", root*r*Math.pow(2, det/1200), at, len + 2.5, 0.022, pa, 6000, null, { bus });
+    tone("sine", root*chord[0]/2, at, len + 1, 0.05, ba, 400, null, { bus }); // the bass, under it
+    if(md.drama) tone("sawtooth", root*chord[0]/2*Math.SQRT2, at, len + 1, 0.012, 2.5, 260, null, { bus }); // and a tritone, darker still
     const d = depth();
-    if(d >= 2 || md.choir) for(const r of chord) tone("sine", root*2*r, at, len + 2.5, 0.009, 3, 2600, wet.verb, { wob:root*2*r*0.006 });
+    if(d >= 2 || md.choir) for(const r of chord) tone("sine", root*2*r, at, len + 2.5, 0.009, 3, 2600, null, { bus, wob:root*2*r*0.006 });
     if(d >= 2) for(const t of [0, len/2]){ thump(at + t, 62, 0.07); thump(at + t + 0.28, 55, 0.045); }
     bar++;
   }
@@ -137,8 +140,17 @@ const MUSIC = (()=>{
   };
   function cue(name){
     if(!playing || !CUES[name]) return;
+    if(name==="phase") turn();
     const r = (POST_ROOT[phaseId()]||523)/4;
     try{ CUES[name](AC.currentTime + 0.03, r); }catch(e){}
+  }
+  /* the market turned: the chord that's playing lets go, and the next starts now, in the new key, under the whoosh */
+  function turn(){
+    if(!cur) return;
+    const now = AC.currentTime;
+    cur.bus.gain.setTargetAtTime(0, now + 0.3, 0.4);
+    step = 0; stepAt = Math.min(stepAt, now + 0.3); quick = true; // what's already scheduled plays out (half a second at most)
+    loop();
   }
   let lastBar = 0;
   function echoTime(len){ if(len !== lastBar){ lastBar = len; wet.echo.delayTime.setTargetAtTime(len/8*1.5, AC.currentTime, 0.5); } }
