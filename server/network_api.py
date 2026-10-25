@@ -11,7 +11,6 @@ same signed session works here, so a player is the same person in both games. Ro
   GET  /api/net/summary    ?player=                  -> a few numbers about the account's network, and who they play as, for the cancel game's card
   GET  /api/net/recent     [?limit=]                 -> what's happened lately: runs finished, challenges beaten, the new internet turned on, epochs
   GET  /api/net/profile    ?h=handle                 -> a player's card: their network, where they stand on every board, their last runs
-  GET  /api/net/cheese                               -> every cheese patron and their level ({handle: level}), for the cancel's badges
   POST /api/net/card       {session, kind, n?, b?}   -> a share card of your network (net), a run (run, n), your place on a board (board, b)
                                                          or the ending (online)
   GET  /api/net/card/ID.png                          -> the card's picture, drawn here (net_card.py), never uploaded
@@ -404,6 +403,14 @@ def summary(player):
             "played": round(g(s, "stats", "played")), "look": look(s), "ranks": r, "cheese": int(g(s, "t2", "cheeseLv"))}
 
 
+def cheese_of(player):
+    """The cheese patron level an account has reached, as of its last synced save: the cancel's server holds a run's
+    claimed level to this, so a run's badge is never more than the player had given when they played it."""
+    with H["db"]() as con:
+        row = con.execute("SELECT cheese FROM net_saves WHERE player=?", (player,)).fetchone()
+    return row["cheese"] if row else 0
+
+
 def recent(limit):
     with H["db"]() as con:
         rows = con.execute("SELECT player, handle, kind, detail, at FROM net_recent ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
@@ -751,10 +758,6 @@ def handle_get(h, path, one):
         if not c:
             return h.redirect(SITE)  # expired or mistyped: the link still opens the game
         return h.raw(200, "text/html; charset=utf-8", share_page(path[11:], c).encode(), "public, max-age=300")
-    if path == "/api/net/cheese":
-        with H["db"]() as con:
-            rows = con.execute("SELECT handle, cheese FROM net_saves WHERE cheese > 0").fetchall()
-        return h.send(200, {"patrons": {r["handle"]: r["cheese"] for r in rows}})
     if path == "/api/net/recent":
         try:
             limit = max(1, min(100, int(one("limit") or 40)))
