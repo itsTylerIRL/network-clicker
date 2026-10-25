@@ -1316,15 +1316,17 @@ function relicShelf(){
 function buildCathedral(body){
   const i = S.wonder||0;
   const wrap = el("div", "cathedral");
-  // the building itself: ten blocks that light as they're built, narrowing to a spire
-  wrap.innerHTML = '<div class="spire">'+WONDER.map((w,k)=>'<i class="'+(k<i ? "on" : k===i ? "next" : "")+'" style="--k:'+k+'" title="'+w.name+'"></i>').reverse().join("")+'</div>'+
-    '<div class="stages">'+WONDER.map((w,k)=>'<div class="stage'+(k<i ? " done" : k===i ? " next" : "")+'"><b>'+(k<i ? "✅ " : "")+w.name+'</b><span>'+fxDesc(w.fx)+'</span></div>').join("")+'</div>';
+  wrap.style.setProperty("--built", i/WONDER.length); // it glows more as it goes up
+  // the building itself: ten blocks that light as they're built, narrowing to a spire; beside it, the stages and what's next
+  wrap.innerHTML = '<div class="cat-art"><div class="spire">'+WONDER.map((w,k)=>'<i class="'+(k<i ? "on" : k===i ? "next" : "")+'" style="--k:'+k+'" title="'+w.name+'"></i>').reverse().join("")+'</div></div>'+
+    '<div class="cat-side"><div class="stages">'+WONDER.map((w,k)=>'<div class="stage'+(k<i ? " done" : k===i ? " next" : "")+'"><b>'+(k<i ? "✅ " : "")+w.name+'</b><span>'+fxDesc(w.fx)+'</span></div>').join("")+'</div></div>';
   body.appendChild(wrap);
+  const side = wrap.querySelector(".cat-side");
   if(i < WONDER.length){
     const c = card("build "+WONDER[i].name, "stage "+(i+1)+" of "+WONDER.length+".", c=>buildStage(c));
     c.dataset.ws = i;
-    body.appendChild(c);
-  } else body.appendChild(el("p", "big-note", "⛪ the cathedral of the network is finished."));
+    side.appendChild(c);
+  } else side.appendChild(el("p", "big-note", "⛪ the cathedral of the network is finished."));
 }
 /* the new internet: seven stages in a ring that closes as they're finished */
 function nnRing(done){
@@ -1340,7 +1342,8 @@ function nnRing(done){
 function buildNewnet(body){
   const i = S.nn.i, st = nnStage(S), e = S.nn.e||0;
   const wrap = el("div", "cathedral nn");
-  wrap.innerHTML = nnRing(i)+'<div class="stages">'+NEWNET.map((w,k)=>'<div class="stage'+(k<i ? " done" : k===i ? " next" : "")+'"><b>'+(k<i ? "✅ " : w.icon+" ")+w.name+'</b><span>'+(k<=i ? w.desc+" " : "")+fxDesc(w.fx)+'</span></div>').join("")+'</div>';
+  wrap.style.setProperty("--built", Math.min(1, i/NEWNET.length));
+  wrap.innerHTML = '<div class="cat-art">'+nnRing(i)+'</div><div class="cat-side"><div class="stages">'+NEWNET.map((w,k)=>'<div class="stage'+(k<i ? " done" : k===i ? " next" : "")+'"><b>'+(k<i ? "✅ " : w.icon+" ")+w.name+'</b><span>'+(k<=i ? w.desc+" " : "")+fxDesc(w.fx)+'</span></div>').join("")+'</div></div>';
   body.appendChild(wrap);
   if(S.ended){
     body.appendChild(el("p", "big-note", "🌐 the new internet is online, since "+new Date(S.ended).toLocaleDateString()+". it doesn't need you to keep it going. it'd like you to stay anyway."));
@@ -1348,7 +1351,7 @@ function buildNewnet(body){
     if(S.t2) buildT2(body);
     body.appendChild(el("div", "box-h", "♾️ epochs <span>"+(e ? e+" done · "+fxDesc({ all:EPOCH_FX.all*e })+", for good" : "it keeps growing")+(S.t2 ? " · poured from the second tier" : "")+"</span>"));
   }
-  const box = el("div", "nn-box");
+  const box = el("div", "nn-box"), side = wrap.querySelector(".cat-side");
   box.innerHTML = '<div class="nn-h"><b>'+st.icon+" "+st.name+'</b><span>'+(S.ended ? "past the ending, as far as it goes · " : "stage "+(i+1)+" of "+NEWNET.length+" · ")+st.desc+'</span></div>'+
     Object.keys(st.need).map(k=>'<div class="nn-row" data-nn="'+k+'"><span>'+(RES_BY[k] ? resIcon(k)+" "+RES_BY[k].name : t2Icon(k)+" "+byId(T2_RES, k).name)+'</span><i class="pbar"><u></u></i><b></b><em></em></div>').join("")+
     (st.req ? '<div class="nn-req" id="nn-req"></div>' : "")+
@@ -1356,7 +1359,7 @@ function buildNewnet(body){
     '<span class="seg" title="how much of what you make goes in">'+[0.25, 0.5, 1].map(v=>'<button class="pick'+(S.nn.share===v ? " on" : "")+'" data-share="'+v+'">'+pct(v)+'</button>').join("")+'</span>'+
     '<button class="btn small" id="nn-pour-now">pour in what you\'re holding</button></div>'+
     '<p class="note">'+(inT2(S) ? "while it\'s pouring, that share of what the second tier makes goes in as it's made." : "while it\'s pouring, that share of everything the stage needs goes in as you make it, and all of it once storage is full. what goes in stays when you touch grass.")+'</p>';
-  body.appendChild(box);
+  (S.ended ? body : side).appendChild(box);
   $("nn-on").onclick = ()=>{ S.nn.on = !S.nn.on; refresh(true); };
   box.querySelectorAll("[data-share]").forEach(b=>b.onclick = ()=>{ S.nn.share = +b.dataset.share; refresh(true); });
   $("nn-pour-now").onclick = pourStored;

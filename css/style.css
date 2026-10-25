@@ -469,6 +469,28 @@ canvas.portrait[height="600"]{aspect-ratio:1;}
 .ms.next{opacity:1;border-color:rgba(241,250,140,.5);box-shadow:0 0 18px rgba(241,250,140,.12);} .ms.next em,.ms.next b{color:var(--gold);}
 /* the cathedral: ten blocks narrowing to a spire, lit as they're built */
 .cathedral{display:grid;grid-template-columns:minmax(120px,200px) 1fr;gap:18px;align-items:end;margin-bottom:14px;}
+.cat-art{position:relative;display:flex;align-items:center;justify-content:center;min-width:0;}
+.cat-side{display:flex;flex-direction:column;gap:12px;min-width:0;}
+.cat-side [data-ws]{max-width:none;}
+/* a big screen: the construct is the centerpiece, as big as the room allows, with a glow that grows as it's built;
+   the stages and what's next stand beside it, a name over each line */
+@media (min-width:1100px){
+  .cathedral{grid-template-columns:minmax(300px,1.1fr) minmax(340px,1fr);gap:clamp(20px,3vw,48px);align-items:center;min-height:min(68vh,820px);}
+  .cat-art{align-self:stretch;}
+  .cat-art::before{content:"";position:absolute;inset:4% 8%;border-radius:50%;pointer-events:none;
+    background:radial-gradient(closest-side,rgba(195,166,255,calc(.06 + var(--built,0)*.22)),transparent);filter:blur(6px);}
+  .nn .cat-art::before{background:radial-gradient(closest-side,rgba(139,233,253,calc(.05 + var(--built,0)*.2)),transparent);}
+  .cathedral .spire{position:relative;width:min(100%,52vh,560px);gap:clamp(3px,.5vh,6px);}
+  .cathedral .spire i{height:clamp(18px,4.4vh,50px);border-radius:5px;}
+  .cathedral .spire i:first-child{height:clamp(34px,9vh,100px);}
+  .cathedral .nn-ring{position:relative;max-width:none;width:min(100%,66vh,640px);}
+  .cathedral .stages{font-size:12px;gap:5px;}
+  .cathedral .stage{flex-direction:column;justify-content:flex-start;gap:2px;padding:7px 12px;border:1px solid transparent;}
+  .cathedral .stage b{font-size:13px;} .cathedral .stage span{text-align:left;}
+  .cathedral .stage.done{border-color:rgba(195,166,255,.18);background:rgba(195,166,255,.03);}
+  .nn .stage.done{border-color:rgba(139,233,253,.18);background:rgba(139,233,253,.03);}
+  .cathedral .stage.next{border-color:rgba(241,250,140,.45);}
+}
 .spire{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 0;}
 .spire i{display:block;height:18px;width:calc(100% - var(--k)*9%);border:1px solid rgba(195,166,255,.25);border-radius:3px;background:rgba(195,166,255,.04);}
 .spire i:first-child{height:34px;clip-path:polygon(50% 0,100% 100%,0 100%);border:0;background:rgba(195,166,255,.12);}
@@ -481,7 +503,7 @@ canvas.portrait[height="600"]{aspect-ratio:1;}
 .stage b{font-weight:normal;text-transform:lowercase;} .stage span{color:#555;text-align:right;}
 .stage.done{color:#c3a6ff;} .stage.done span{color:#9aa6ab;}
 .stage.next{color:var(--gold);background:rgba(241,250,140,.06);} .stage.next span{color:#bbb;}
-@media (max-width:600px){ .cathedral{grid-template-columns:1fr;} .spire{width:100%;max-width:220px;margin:0 auto;} }
+@media (max-width:600px){ .cathedral{grid-template-columns:1fr;} .spire{width:100%;max-width:220px;margin:0 auto;} .cat-side{gap:10px;} }
 [data-ws]{width:100%;max-width:440px;}
 body.calm .spire i.next{animation:none;}
 
