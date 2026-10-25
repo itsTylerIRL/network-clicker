@@ -133,18 +133,21 @@ const AMBIENT = (()=>{
   const toScreen = (x, y) => ({ x:(x - cam.x)*cam.z + W/2 + drift.x, y:(y - cam.y)*cam.z + H/2 + drift.y });
   const crowdOf = id => crowds.find(c=>c.id===id);
   const homeOf = a => { const c = crowdOf(a.crowd); return c ? { x:c.x + a.ox, y:c.y + a.oy } : { x:a.x, y:a.y }; };
-  /* things to say, by the market and by the job */
+  /* things to say: remilia, by the market and by the job. CULT is "cult morning", or afternoon or night, by the real clock */
   const SAY = {
-    any:   ["gm", "gn", "wagmi", "based", "🌸", "milady", "fr", "real", "ser", "lol", "ty", "we're so back", "♡", "✨", "frens"],
-    accum: ["building", "early", "comfy", "stacking", "🌱"],
-    mania: ["lfg", "🚀", "up only", "new ath", "send it", "📈"],
-    dist:  ["taking profits", "rotating", "👀", "exit liquidity?", "hmm"],
-    bear:  ["it's over", "ngmi", "holding", "red again", "pain", "📉", "still here"],
-    job: { poster:["posting", "brb posting", "👀"], memer:["🐸", "new meme", "kek"], keeper:["read this", "📜", "lore"], trader:["chart", "📈", "longing"],
+    any:   ["CULT", "CULT", "don't worry about it", "1000 year forever", "network spirituality", "post-authorship", "trust the network",
+            "yes milady", "milady", "remilia", "touch grass", "the network is growing", "neochibi", "beautiful", "♡", "🌸"],
+    accum: ["building", "early", "comfy", "network spirituality"],
+    mania: ["1000 year forever", "🚀", "milady season", "it's happening", "up only"],
+    dist:  ["taking profits", "👀", "don't worry about it", "rotating"],
+    bear:  ["don't worry about it", "still posting", "the network holds", "📉", "it's so over"],
+    job: { poster:["posting", "brb posting", "post-authorship"], memer:["🐸", "new meme", "kek"], keeper:["read this", "📜", "lore"], trader:["chart", "📈", "longing"],
            artist:["🎨", "drip", "new piece"], streamer:["live!", "📣", "chat?"], mod:["be nice", "🛡️", "no drama"], dev:["shipped", "⌨️", "it compiles"],
-           acolyte:["🕯️", "pray", "blessed"], seer:["i see it", "🔮", "soon"], idle:["zzz", "💤", "5 more min"], away:["⚔️", "raiding", "brb"] },
+           acolyte:["🕯️", "network spirituality", "blessed"], seer:["i see it", "🔮", "1000 year forever"], idle:["zzz", "💤", "5 more min"], away:["⚔️", "raiding", "brb"] },
   };
-  const say = a => { const pool = SAY.any.concat(SAY[R.phase.id]||[], SAY[R.phase.id]||[], SAY.job[a.crowd]||[]); return pool[Math.floor(Math.random()*pool.length)]; };
+  const cult = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? "cult morning" : h >= 12 && h < 18 ? "cult afternoon" : "cult night"; };
+  const line = t => t==="CULT" ? cult() : t;
+  const say = a => { const pool = SAY.any.concat(SAY[R.phase.id]||[], SAY[R.phase.id]||[], SAY.job[a.crowd]||[]); return line(pool[Math.floor(Math.random()*pool.length)]); };
   const pick = list => list[Math.floor(Math.random()*list.length)];
   let spawnAcc = {}, tripAcc = 0, sayAcc = 0;
   function spawn(dt){
@@ -210,8 +213,8 @@ const AMBIENT = (()=>{
       if(tr.kind==="gift"){
         fly(toScreen(a.x, a.y - a.size*0.5), toScreen(you.x, you.y), tr.res, { d:0.7, arc:-40, px:16 });
         if(typeof react==="function" && Math.random() < 0.5) react("buy");
-        a.say = { txt:pick(["for you ♡", "here", "gm", "made this", "🎁"]), life:2.4 };
-      } else a.say = { txt:pick(["hi", "gm", "hey frens", "what's this", "visiting", "👋"]), life:2.4 };
+        a.say = { txt:line(pick(["for you ♡", "made this", "🎁", "CULT", "don't worry about it"])), life:2.4 };
+      } else a.say = { txt:line(pick(["CULT", "hi frens", "visiting", "👋", "network spirituality", "trust the network"])), life:2.4 };
       return;
     }
     a.x += dx/d*step; a.y += dy/d*step;
