@@ -1682,7 +1682,7 @@ function update(){
   const outfit = JSON.stringify(youLook()); // relics changed what she'd wear (a raid, a restored save): dress her again
   if(outfit !== wornNow){ wornNow = outfit; drawYou(); }
   // you
-  $("post-val").textContent = "+"+fmt(R.click)+" per post"+(R.autoclick ? " · bot posts "+R.autoclick+"/s" : "");
+  youStats();
   const memeBtn = $("btn-meme");
   memeBtn.classList.toggle("hidden", !(S.seen.vibes >= MEME_COST || S.seen.memes>0));
   memeBtn.disabled = S.res.vibes < MEME_COST || S.res.memes >= R.cap.memes;
@@ -2549,6 +2549,49 @@ function renderAcctAll(){
   if(who && who.dataset.h !== (a ? a.handle : "")){ who.dataset.h = a ? a.handle : ""; who.innerHTML = a ? whoTag(a.handle) : ""; }
 }
 
+/* ---------- beside your milady: who you are, whether it's on your account yet, and how it's going ---------- */
+function syncLine(){
+  if(!online() || !acct()) return ["local", "saved on this device"];
+  if(syncing) return ["busy", "saving…"];
+  if(syncState==="synced" && syncAt){
+    const ago = Math.round((Date.now()-syncAt)/1000);
+    return [ago < 90 ? "ok" : "stale", (ago < 90 ? "synced " : "last synced ")+(ago < 5 ? "just now" : fmtTime(ago)+" ago")];
+  }
+  if(!syncState) return ["busy", "syncing…"];
+  return [/^offline/.test(syncState) ? "off" : "bad", syncState];
+}
+let medalFor = "";
+function youStats(){
+  const [k, words] = syncLine(), sy = $("you-sync");
+  if(sy.dataset.k !== k || sy.dataset.w !== words){
+    sy.dataset.k = k; sy.dataset.w = words; sy.className = "you-sync "+k;
+    sy.innerHTML = '<i></i><span>'+esc(words)+'</span>';
+    sy.title = k==="ok" ? "everything up to then is on your account: safe to close" : k==="local" ? "this browser keeps it. sign in to keep it on your account, on any device" : "tap to sync now";
+  }
+  $("ys-post").textContent = "+"+fmt(R.click);
+  $("ys-bots").textContent = R.autoclick ? "bots "+fmt(R.autoclick)+"/s" : "vibes a post";
+  $("ys-net").textContent = fmt(S.miladys.length)+(R.housing ? " / "+fmt(R.housing) : "");
+  $("ys-happy").textContent = S.miladys.length ? "happiness "+pct(R.happy) : "miladys";
+  $("ys-run").textContent = "#"+runNo();
+  $("ys-time").textContent = fmtTime(S.runT)+(S.challenge ? " · ⚖️" : "");
+  $("ys-grass").textContent = fmt(Math.floor(S.grass));
+  const g = S.tech.garden ? grassGain(S, R.f) : 0;
+  $("ys-gain").textContent = g ? "+"+fmt(g)+" to touch" : S.t2 ? "the second tier" : S.grass || resets(S) ? "held" : "none yet";
+  // the best place you hold on a board, from the account's last word on it
+  let best = null;
+  if(online() && acct()) for(const b in netRanks){ const x = netRanks[b]; if(x && x.rank && boardInfo(b) && (!best || x.rank < best.rank)) best = { b, rank:x.rank }; }
+  const key = best ? best.b+best.rank : "", m = $("you-medal");
+  if(key !== medalFor){
+    medalFor = key; m.classList.toggle("hidden", !best);
+    if(best){ m.innerHTML = '<i>'+(best.rank<=3 ? ["🥇","🥈","🥉"][best.rank-1] : "#"+best.rank)+'</i><span>'+(best.rank<=3 ? "#"+best.rank+" " : "")+esc(boardInfo(best.b)[0].replace(/^\S+\s/, ""))+'</span>';
+      m.className = "you-medal"+(best.rank<=3 ? " r"+best.rank : ""); m.dataset.b = best.b; }
+  }
+}
+function wireYou(){
+  $("you-sync").onclick = ()=>{ if(online() && acct()){ syncUp(); youStats(); } else if(online()) openSettings(); };
+  $("you-medal").onclick = ()=>{ const b = $("you-medal").dataset.b; if(!b) return; if(b.startsWith("ch_")) boardCh = b.slice(3); boardKey = b; tab = "boards"; refresh(true); };
+}
+
 /* ---------- the boards ---------- */
 const BOARD_INFO = {
   fastest: ["⚡ fastest run", "quickest to the infinite garden. challenge runs don't count"],
@@ -2864,6 +2907,7 @@ async function init(){
   document.querySelectorAll(".tv").forEach(b=>b.onclick = e=>{ e.stopPropagation(); AMBIENT.start(); });
   for(const ev of ["pointerdown", "keydown"]) addEventListener(ev, ()=>{ lastTouch = Date.now(); }, { passive:true });
   checkVersion(); setInterval(checkVersion, 5*60*1000);
+  wireYou();
   checkNet().then(()=>{ // a shared link brings people here with ?p=handle: open that player's card
     const p = new URLSearchParams(location.search).get("p");
     if(!p || !netOn || netOn.down) return;
