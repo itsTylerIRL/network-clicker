@@ -302,6 +302,23 @@ const NEWNET = [
   { id:"internet",  icon:"🌐", name:"the new internet", desc:"turn it on.",                                         need:{vibes:1.8e8, devotion:6e6, ether:1.2e6}, req:{cathedral:true}, fx:{all:1} },
 ];
 
+/* after the ending: the new internet keeps growing, an epoch at a time, poured into the same way. There's no last one:
+   each asks for half again what the one before did, from a different mix, and each is +10% everything for good. */
+const EPOCH_GROW = 1.5, EPOCH_FX = { all:0.1 };
+const EPOCHS = [
+  { name:"uptime",           desc:"keep it running. that's the whole job now.",   need:{vibes:1.2e8,  memes:3e7} },
+  { name:"the long tail",    desc:"everyone who was ever too shy to post.",       need:{lore:4e7,     compute:1.6e7} },
+  { name:"mirrors",          desc:"copies of everything, everywhere.",            need:{cult:3e7,     drip:1e7} },
+  { name:"federation",       desc:"other networks ask to join.",                  need:{clout:1.6e7,  devotion:5e6} },
+  { name:"the commons",      desc:"a park in the middle of it, for nobody.",      need:{ether:1e6,    vibes:1.6e8} },
+  { name:"dead links",       desc:"bring back every page that went missing.",     need:{memes:5e7,    lore:4e7, ether:5e5} },
+];
+function epochStage(e){
+  const E = EPOCHS[e % EPOCHS.length], x = Math.pow(EPOCH_GROW, e), need = {};
+  for(const k in E.need) need[k] = Math.round(E.need[k]*x/1000)*1000;
+  return { id:"epoch", icon:"♾️", name:"epoch "+(e+1)+": "+E.name, desc:E.desc, need, fx:EPOCH_FX };
+}
+
 /* rituals: spend devotion for something now. cd is the cooldown in seconds. */
 const RITUALS = [
   { id:"prayer",   name:"group prayer",     icon:"🙏", cost:{devotion:30}, cd:180, desc:"+30% happiness for 2 minutes." },
@@ -424,6 +441,8 @@ const ACHIEVEMENTS = [
   { id:"rfc",      name:"request for comments",desc:"finish the protocol.",               test:s=>((s.nn||{}).i||0)>=1 },
   { id:"halfway",  name:"halfway there",       desc:"finish four stages of the new internet.", test:s=>((s.nn||{}).i||0)>=4 },
   { id:"online",   name:"online",              desc:"turn on the new internet.",          test:s=>!!s.ended },
+  { id:"epoch",    name:"uptime",              desc:"finish an epoch of the new internet.", test:s=>((s.nn||{}).e||0)>=1 },
+  { id:"epochs",   name:"the long now",        desc:"finish ten epochs of the new internet.", test:s=>((s.nn||{}).e||0)>=10 },
 ];
 
 const NAMES = ["Miyu","Lain","Sakura","Remi","Yuki","Hana","Momo","Kiki","Nana","Rin","Aoi","Mika","Luna","Coco","Pika","Suki",

@@ -81,7 +81,7 @@ function save(){
    keeps it, and sound or the ambient screen are about where you are. Each device keeps its own and lays them over
    whatever a save says, whichever device that save came from. A device that has never set them starts from the
    network's. */
-const DEVICE_KEY = "network-device", DEVICE_SETTINGS = ["mute", "vol", "bg", "calm", "faces", "ambient", "notifyOn", "notify"];
+const DEVICE_KEY = "network-device", DEVICE_SETTINGS = ["mute", "vol", "music", "bg", "calm", "faces", "ambient", "notifyOn", "notify"];
 function deviceSettings(s){
   let d = null; try{ d = JSON.parse(localStorage.getItem(DEVICE_KEY)); }catch(e){}
   if(d && s && s.settings) for(const k of DEVICE_SETTINGS) if(k in d) s.settings[k] = d[k];
@@ -145,6 +145,7 @@ function sumFx(s){
   for(let i=0; i<(s.wonder||0); i++) add(WONDER[i].fx, 1);
   for(const c of CHALLENGES) if(s.chDone[c.id]) add(c.reward, 1);
   for(let i=0; i<((s.nn && s.nn.i)||0); i++) add(NEWNET[i].fx, 1);
+  add(EPOCH_FX, (s.nn && s.nn.e)||0);
   f.all = (f.all||0) + Object.keys(s.ach).length * ACH_EACH; // every achievement is worth a little
   return f;
 }
@@ -245,9 +246,11 @@ function pourRate(s, R, k){
   const full = s.res[k] >= R.cap[k] - 1e-6;
   return Math.max(0, R.net[k]) * (full ? 1 : s.nn.share);
 }
+/* what's being poured into: a stage, or past the ending, the next epoch */
+const nnStage = s => s.ended ? epochStage(s.nn.e||0) : NEWNET[s.nn.i];
 function pour(s, R, dt, live){
-  if(!nnOpen(s) || s.ended) return;
-  const st = NEWNET[s.nn.i]; if(!st) return;
+  if(!nnOpen(s)) return;
+  const st = nnStage(s); if(!st) return;
   if(s.nn.on) for(const k in st.need){
     const left = st.need[k] - (s.nn.got[k]||0); if(left <= 0) continue;
     const take = Math.min(left, s.res[k], pourRate(s, R, k)*dt);
@@ -256,7 +259,7 @@ function pour(s, R, dt, live){
   if(Object.keys(st.need).every(k=>(s.nn.got[k]||0) >= st.need[k]-1e-6) && nnReqMet(s, st)) finishStage(s, live);
 }
 function pourStored(){ // everything you're holding that the stage still needs, in one go
-  const st = NEWNET[S.nn.i]; if(!st) return;
+  const st = nnStage(S); if(!st) return;
   let any = 0;
   for(const k in st.need){ const take = Math.min(st.need[k] - (S.nn.got[k]||0), S.res[k]); if(take > 0){ S.res[k] -= take; S.nn.got[k] = (S.nn.got[k]||0) + take; any++; } }
   if(!any) return sfx.no();
@@ -264,8 +267,14 @@ function pourStored(){ // everything you're holding that the stage still needs, 
   pour(S, R, 0, true); refresh();
 }
 function finishStage(s, live){
-  const st = NEWNET[s.nn.i];
-  s.nn.i++; s.nn.got = {};
+  const st = nnStage(s);
+  s.nn.got = {};
+  if(s.ended){
+    s.nn.e = (s.nn.e||0) + 1;
+    if(live){ sfx.shiny(); FX.research(); react("love"); log("♾️ the new internet: <b>"+st.name+"</b> is done. "+fxDesc(st.fx)+", for good."); }
+    return;
+  }
+  s.nn.i++;
   if(s.nn.i >= NEWNET.length){ s.ended = Date.now(); s.endSeen = false; }
   if(!live) return;
   sfx.shiny(); FX.research(); react("love");
@@ -1136,17 +1145,17 @@ function nnRing(done){
   return s + '<text class="mid" x="90" y="96">'+(done >= n ? "online" : done+" / "+n)+'</text></svg>';
 }
 function buildNewnet(body){
-  const i = S.nn.i, st = NEWNET[i];
+  const i = S.nn.i, st = nnStage(S), e = S.nn.e||0;
   const wrap = el("div", "cathedral nn");
   wrap.innerHTML = nnRing(i)+'<div class="stages">'+NEWNET.map((w,k)=>'<div class="stage'+(k<i ? " done" : k===i ? " next" : "")+'"><b>'+(k<i ? "✅ " : w.icon+" ")+w.name+'</b><span>'+(k<=i ? w.desc+" " : "")+fxDesc(w.fx)+'</span></div>').join("")+'</div>';
   body.appendChild(wrap);
   if(S.ended){
     body.appendChild(el("p", "big-note", "🌐 the new internet is online, since "+new Date(S.ended).toLocaleDateString()+". it doesn't need you to keep it going. it'd like you to stay anyway."));
     const b = el("button", "btn small", "watch the ending again"); b.onclick = ()=>showEnding(); body.appendChild(b);
-    return;
+    body.appendChild(el("div", "box-h", "♾️ epochs <span>"+(e ? e+" done · "+fxDesc({ all:EPOCH_FX.all*e })+", for good" : "it keeps growing")+"</span>"));
   }
   const box = el("div", "nn-box");
-  box.innerHTML = '<div class="nn-h"><b>'+st.icon+" "+st.name+'</b><span>stage '+(i+1)+" of "+NEWNET.length+" · "+st.desc+'</span></div>'+
+  box.innerHTML = '<div class="nn-h"><b>'+st.icon+" "+st.name+'</b><span>'+(S.ended ? "past the ending, as far as it goes · " : "stage "+(i+1)+" of "+NEWNET.length+" · ")+st.desc+'</span></div>'+
     Object.keys(st.need).map(k=>'<div class="nn-row" data-nn="'+k+'"><span>'+resIcon(k)+" "+RES_BY[k].name+'</span><i class="pbar"><u></u></i><b></b><em></em></div>').join("")+
     (st.req ? '<div class="nn-req" id="nn-req"></div>' : "")+
     '<div class="nn-ctl"><button class="tog'+(S.nn.on ? " on" : "")+'" id="nn-on">'+(S.nn.on ? "pouring" : "paused")+'</button>'+
@@ -1588,8 +1597,8 @@ function update(){
     const c = S.run.auto;
     $("auto-ct").textContent = "this run: "+[c.b && fmt(c.b)+" built", c.t && c.t+" researched", c.u && c.u+" upgrades", c.m && fmt(c.m)+" memes"].filter(Boolean).join(" · ") || "this run: nothing yet";
   }
-  const st = NEWNET[S.nn.i];
-  if(st && !S.ended) body.querySelectorAll("[data-nn]").forEach(row=>{
+  const st = nnStage(S);
+  if(st) body.querySelectorAll("[data-nn]").forEach(row=>{
     const k = row.dataset.nn, got = S.nn.got[k]||0, need = st.need[k], left = need - got, rate = S.nn.on ? pourRate(S, R, k) : 0;
     row.querySelector("u").style.width = Math.min(100, got/need*100)+"%";
     row.querySelector("b").textContent = fmt(got)+" / "+fmt(need);
@@ -1677,7 +1686,7 @@ function signature(){
     TECHS.filter(t=>techShown(t)||S.tech[t.id]).map(t=>t.id+(S.tech[t.id]?1:0)).join(),
     UPGRADES.filter(u=>shown(u)||S.up[u.id]).map(u=>u.id+(S.up[u.id]?1:0)).join(),
     JOBS.filter(shown).length, Object.keys(S.perks).length, RITUALS.filter(shown).length, S.raids.length, S.wonder, Object.keys(S.relics).length,
-    Object.values(S.relics).join(""), !!R.f.autoassign, S.nn.i, S.ended, tab==="miladys" ? S.miladys.map(m=>m.id+m.job+(m.away||"")).join() : ""].join("|");
+    Object.values(S.relics).join(""), !!R.f.autoassign, S.nn.i, S.nn.e, S.ended, tab==="miladys" ? S.miladys.map(m=>m.id+m.job+(m.away||"")).join() : ""].join("|");
 }
 function refresh(force){
   R = rates(S);
@@ -1720,6 +1729,7 @@ function openSettings(){
     '<div class="set-h">on this device <span>'+(acct() ? "your other devices keep their own" : "")+'</span></div>'+
     '<div class="set-row"><span>sound</span><button class="tog'+(S.settings.mute ? "" : " on")+'" id="set-mute">'+(S.settings.mute ? "off" : "on")+'</button></div>'+
     '<div class="set-row"><span>effects volume</span><input id="set-vol" type="range" min="0" max="100" value="'+(S.settings.vol!=null ? S.settings.vol : 70)+'"></div>'+
+    '<div class="set-row"><span>music <small class="note">(all the way down is off)</small></span><input id="set-music" type="range" min="0" max="100" value="'+(S.settings.music!=null ? S.settings.music : 40)+'"></div>'+
     '<div class="set-row"><span>animated backdrop<br><span class="note">off is lighter, for a phone that lags</span></span><button class="tog'+(S.settings.bg!==false ? " on" : "")+'" id="set-bg">'+(S.settings.bg!==false ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>calm (less motion)</span><button class="tog'+(S.settings.calm ? " on" : "")+'" id="set-calm">'+(S.settings.calm ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>her face reacts</span><button class="tog'+(S.settings.faces!==false ? " on" : "")+'" id="set-faces">'+(S.settings.faces!==false ? "on" : "off")+'</button></div>'+
@@ -1741,6 +1751,7 @@ function openSettings(){
   document.querySelectorAll("#modal [data-num]").forEach(b=>b.onclick = ()=>{ S.settings.num = b.dataset.num; refresh(true); renderLog(); openSettings(); });
   whoControls($("who-set"));
   $("set-vol").oninput = e=>{ S.settings.vol = +e.target.value; };
+  $("set-music").oninput = e=>{ S.settings.music = +e.target.value; MUSIC.update(); };
   $("set-vol").onchange = ()=>sfx.post();
   $("set-wear").onclick = ()=>{ S.settings.wear = S.settings.wear===false; drawYou(); openSettings(); };
   document.querySelectorAll("#modal [data-amb]").forEach(b=>b.onclick = ()=>{ S.settings.ambient = b.dataset.amb; openSettings(); });
@@ -1763,7 +1774,7 @@ function syncLook(){
   document.body.classList.toggle("calm", !!S.settings.calm);
   document.body.classList.toggle("nobg", S.settings.bg===false);
 }
-function syncMute(){ document.querySelectorAll(".mute").forEach(b=>b.textContent = S.settings.mute ? "🔇" : "🔊"); }
+function syncMute(){ document.querySelectorAll(".mute").forEach(b=>b.textContent = S.settings.mute ? "🔇" : "🔊"); if(typeof MUSIC!=="undefined") MUSIC.update(); }
 
 function openHelp(){
   openModal('<h2>how to play</h2>'+
@@ -1953,7 +1964,7 @@ function catchUp(quiet){
   S.last = Date.now();
   if(gone <= 0 && !awaySnap) return;
   if(!awaySnap) awaySnap = { secs:0, res:Object.assign({}, S.res), people:S.miladys.length, firstId:S.nextId, raids:S.stats.raids||0,
-    relics:Object.assign({}, S.relics), cycles:S.cycle, nn:S.nn.i };
+    relics:Object.assign({}, S.relics), cycles:S.cycle, nn:S.nn.i, ep:S.nn.e||0 };
   awaySnap.secs += Math.max(0, gone);
   const step = Math.max(1, gone/20000);
   for(let t=0; t<gone; t+=step) tick(S, Math.min(step, gone-t), false);
@@ -1966,7 +1977,8 @@ function catchUp(quiet){
   const found = RELICS.filter(r=>(S.relics[r.id]||0) > (relics[r.id]||0)).map(r=>r.icon+" "+r.name+(S.relics[r.id]>1 ? " (lv "+S.relics[r.id]+")" : ""));
   const lines = [joined && "🌸 "+joined+" miladys joined", left > 0 && "🥀 "+left+" logged off", back && "⚔️ "+back+" raid"+(back>1 ? "s" : "")+" came home",
     found.length && "🗿 relics: "+found.join(", "), S.cycle > cycles && "📈 the market went round "+(S.cycle-cycles)+" time"+(S.cycle-cycles>1 ? "s" : ""),
-    S.nn.i > snap.nn && "🌐 finished "+NEWNET.slice(snap.nn, S.nn.i).map(s=>s.name).join(", ")].filter(Boolean);
+    S.nn.i > snap.nn && "🌐 finished "+NEWNET.slice(snap.nn, S.nn.i).map(s=>s.name).join(", "),
+    (S.nn.e||0) > snap.ep && "♾️ "+((S.nn.e||0) - snap.ep)+" epoch"+((S.nn.e||0) - snap.ep > 1 ? "s" : "")+" of the new internet done"].filter(Boolean);
   const msg = "while you were away ("+fmtTime(away)+"): "+(got || "nothing much.")+(lines.length ? " "+lines.join(" · ")+"." : "");
   if(away < 60) return; // a tab that was in the background a moment isn't worth a message
   log("🌙 "+msg);
@@ -2159,10 +2171,10 @@ function frame(){
 }
 
 /* ---------- notifications: only if you ask, only while the tab's in the background ---------- */
-const NOTIFY_WHAT = { raid:"a raid comes home", ritual:"a ritual is ready", full:"storage fills up", grass:"you can touch grass", nn:"a stage of the new internet is done" };
+const NOTIFY_WHAT = { raid:"a raid comes home", ritual:"a ritual is ready", full:"storage fills up", grass:"you can touch grass", nn:"a stage or epoch of the new internet is done" };
 let watchPrev = null, SWREG = null;
 function watchState(){
-  return { raids:S.stats.raids||0, rit:S.tech.iconography ? readyCounts().rituals : 0, nn:S.nn.i,
+  return { raids:S.stats.raids||0, rit:S.tech.iconography ? readyCounts().rituals : 0, nn:S.nn.i, ep:S.nn.e||0,
     full:RES.filter(r=>isVisible(r.id) && S.res[r.id] >= R.cap[r.id]-1e-6).map(r=>r.id), grass:!!S.tech.garden && grassGain(S, R.f) >= 1 };
 }
 function watch(){
@@ -2173,6 +2185,7 @@ function watch(){
   const fresh = now.full.filter(k=>!p.full.includes(k));
   if(fresh.length) notify("full", "📦 "+fresh.map(k=>RES_BY[k].name).join(", ")+" "+(fresh.length > 1 ? "are" : "is")+" full", "anything more is going to waste.");
   if(now.grass && !p.grass) notify("grass", "🌿 you can touch grass", "the infinite garden is up.");
+  if(now.ep > p.ep) notify("nn", "♾️ "+epochStage(now.ep-1).name+" is done", "on to "+epochStage(now.ep).name+".");
   if(now.nn > p.nn) notify("nn", "🌐 "+NEWNET[now.nn-1].name+" is done", now.nn >= NEWNET.length ? "the new internet is online." : "on to "+NEWNET[now.nn].name+".");
 }
 function notify(kind, title, body){
@@ -2336,39 +2349,148 @@ const BOARD_INFO = {
   grass:   ["🌿 most grass", "grass earned while signed in"],
   network: ["🌸 biggest network", "the most miladys at once in one run"],
   online:  ["🌐 first online", "who turned on the new internet first"],
+  uptime:  ["♾️ uptime", "the most epochs past the ending, grown while signed in"],
+  ch:      ["⚖️ challenges", ""],
+  recent:  ["📰 lately", "what's happened on the network lately, newest first"],
 };
-let boardKey = "fastest";
+/* each challenge has a board of its own: its fastest clear */
+const boardInfo = k => k.startsWith("ch_") ? ["⚖️ "+byId(CHALLENGES, k.slice(3)).name, "fastest to beat "+byId(CHALLENGES, k.slice(3)).name+": "+byId(CHALLENGES, k.slice(3)).rule.replace(/\.$/, "")] : BOARD_INFO[k];
+let boardKey = "fastest", boardCh = CHALLENGES[0].id;
 const boardCache = {};
 function boardValue(b, r){
   const d = r.detail || {};
-  if(b==="fastest") return ['<b>'+fmtTime(r.value)+'</b>', "run "+d.n+" · "+d.cycles+" cycles · peak "+fmt(d.peak)];
+  if(b==="fastest" || b.startsWith("ch_")) return ['<b>'+fmtTime(r.value)+'</b>', "run "+d.n+" · "+d.cycles+" cycles · peak "+fmt(d.peak)];
   if(b==="grass") return ['<b>'+fmt(r.value)+' 🌿</b>', d.runs+" runs"];
   if(b==="network") return ['<b>'+fmt(r.value)+' miladys</b>', "run "+d.n];
+  if(b==="uptime") return ['<b>'+fmt(r.value)+' epoch'+(r.value===1 ? "" : "s")+'</b>', d.days ? "online "+d.days+" day"+(d.days===1 ? "" : "s") : ""];
   return ['<b>'+new Date(r.value*1000).toLocaleDateString()+'</b>', "day "+d.days+" · run "+d.runs];
 }
+/* how far it is to the next place up (first online is settled once it happens: nothing to close) */
+function boardGap(b, me){
+  if(me.rank===1) return "nobody's ahead of you";
+  if(me.ahead==null || b==="online") return "";
+  const n = Math.abs(me.ahead - me.value), to = " to pass #"+(me.rank-1);
+  if(b==="fastest" || b.startsWith("ch_")) return fmtTime(n)+" faster"+to;
+  if(b==="uptime") return fmt(n+1)+" more epoch"+(n ? "s" : "")+to;
+  if(b==="grass") return fmt(Math.floor(n)+1)+" 🌿 more"+to;
+  return fmt(n+1)+" more miladys at once"+to;
+}
+/* who a player plays as, from the board: only trait files this game has, so a face is never a stray picture */
+function boardLook(l){
+  if(!l || !l.layers || !ASSETS || !ASSETS[l.cfg]) return null;
+  const look = {};
+  for(const k in l.layers) if(ASSETS[l.cfg][k] && ASSETS[l.cfg][k].includes(l.layers[k])) look[k] = l.layers[k];
+  if(!Object.keys(look).length) return null;
+  if(l.eye) look._eye = l.eye;
+  return { look, kind:l.cfg==="Remilio" ? "remilio" : "milady" };
+}
+const boardFace = (l, cls) => { const f = boardLook(l);
+  return '<span class="bface '+(cls||"")+'">'+(f ? '<img alt="" data-look="'+esc(JSON.stringify(f))+'">' : '<i>🌸</i>')+'</span>'; };
 function buildBoards(body){
-  body.innerHTML = '<div class="board-pick seg wrap">'+Object.keys(BOARD_INFO).map(k=>'<button class="pick'+(k===boardKey ? " on" : "")+'" data-board="'+k+'">'+BOARD_INFO[k][0]+'</button>').join("")+'</div>'+
-    '<p class="note" id="board-what">'+BOARD_INFO[boardKey][1]+'.</p><div id="board-list"><p class="note">loading…</p></div>'+
+  const group = boardKey.startsWith("ch_") ? "ch" : boardKey;
+  body.innerHTML = '<div class="board-pick seg wrap">'+Object.keys(BOARD_INFO).map(k=>'<button class="pick'+(k===group ? " on" : "")+'" data-board="'+k+'">'+BOARD_INFO[k][0]+'</button>').join("")+'</div>'+
+    (group==="ch" ? '<div class="board-sub seg wrap">'+CHALLENGES.map(c=>'<button class="pick'+("ch_"+c.id===boardKey ? " on" : "")+'" data-board="ch_'+c.id+'">'+c.name+'</button>').join("")+'</div>' : "")+
+    '<p class="note" id="board-what">'+boardInfo(boardKey)[1]+'.</p><div id="board-list">'+(boardKey==="recent" ? feedSkeleton() : boardSkeleton())+'</div>'+
     '<div class="acct-row" id="acct-boards"></div>'+
     '<p class="note">only verified players are on the boards, and only runs started after signing in count. the game runs on your device, so the service checks every save against the last one it took: time can\'t go faster than it does, and everything has to add up.</p>';
-  body.querySelectorAll("[data-board]").forEach(b=>b.onclick = ()=>{ boardKey = b.dataset.board; refresh(true); });
+  body.querySelectorAll("[data-board]").forEach(b=>b.onclick = ()=>{
+    const k = b.dataset.board;
+    if(k.startsWith("ch_")) boardCh = k.slice(3);
+    boardKey = k==="ch" ? "ch_"+boardCh : k; refresh(true); });
   renderAcct($("acct-boards"));
   loadBoard();
 }
+/* the shape of what's on its way, instead of the word "loading" */
+const boardSkeleton = () => '<div class="podium skel" aria-busy="true">'+[2,1,3].map(n=>'<div class="pod p'+n+'"><span class="bface big"></span><b></b><em></em><div class="plinth"></div></div>').join("")+'</div>'+
+  '<div class="brows skel">'+'<div class="brow"><i></i><span class="bface"></span><b></b><em></em></div>'.repeat(5)+'</div>';
 async function loadBoard(){
   const k = boardKey, c = boardCache[k];
-  if(c && Date.now()-c.at < 30000) return drawBoard(k, c.data);
-  const r = await api("/api/net/board?b="+k+"&limit=50"+(acct() ? "&player="+acct().player : ""));
+  if(c && Date.now()-c.at < 30000) return k==="recent" ? drawFeed(c.data) : drawBoard(k, c.data);
+  const r = await api(k==="recent" ? "/api/net/recent?limit=40" : "/api/net/board?b="+k+"&limit=50"+(acct() ? "&player="+acct().player : ""));
   if(r.status!==200){ if($("board-list") && boardKey===k) $("board-list").innerHTML = '<p class="note">the boards can\'t be reached right now.</p>'; return; }
   boardCache[k] = { at:Date.now(), data:r.data };
-  drawBoard(k, r.data);
+  k==="recent" ? drawFeed(r.data) : drawBoard(k, r.data);
+}
+/* faces fill in as they're put together; the same one is only made once */
+function fillFaces(box){
+  for(const im of box.querySelectorAll("img[data-look]")){
+    const f = JSON.parse(im.dataset.look);
+    thumb(f.look, f.kind).then(src=>{ if(im.isConnected){ im.src = src; im.parentNode.classList.add("ready"); } }).catch(()=>{});
+  }
+}
+/* anyone on a board or in the feed opens their card (their name is a link of its own, and still goes where it goes) */
+function wireProfiles(box){
+  box.querySelectorAll("[data-h]").forEach(e=>{ e.classList.add("tap"); e.tabIndex = 0;
+    e.onclick = ev=>{ if(!ev.target.closest("a")) openProfile(e.dataset.h); };
+    e.onkeydown = ev=>{ if(ev.key==="Enter" && !ev.target.closest("a")) openProfile(e.dataset.h); }; });
+}
+const agoShort = at => { const m = Math.max(0, Math.round((Date.now()/1000-at)/60)); return m<1 ? "now" : m<60 ? m+"m" : m<1440 ? Math.round(m/60)+"h" : Math.round(m/1440)+"d"; };
+const feedSkeleton = () => '<div class="brows skel" aria-busy="true">'+'<div class="brow"><i></i><span class="bface"></span><b></b><em></em></div>'.repeat(8)+'</div>';
+function feedLine(e){
+  const d = e.detail || {}, ch = d.ch && byId(CHALLENGES, d.ch);
+  if(e.kind==="online") return ["🌐", "turned on the new internet", "after "+d.days+" day"+(d.days===1 ? "" : "s")];
+  if(e.kind==="epoch") return ["♾️", "reached "+epochStage(d.e-1).name, "past the ending"];
+  if(ch && d.beaten) return ["⚖️", "beat <b>"+ch.name+"</b> in "+fmtTime(d.t), "run "+d.n+" · peak "+fmt(d.peak)+" miladys"];
+  return ["🌿", "touched grass after "+fmtTime(d.t)+(ch ? " under "+ch.name : ""), "run "+d.n+" · peak "+fmt(d.peak)+" miladys · +"+fmt(d.grass)+" 🌿"];
+}
+function drawFeed(d){
+  const box = $("board-list"); if(!box || boardKey!=="recent") return;
+  if(!d.rows.length){ box.innerHTML = '<p class="note board-empty">nothing yet. finish a run while you\'re signed in and it shows up here.</p>'; return; }
+  box.innerHTML = '<div class="brows feed">'+d.rows.map(e=>{ const [ic, what, sub] = feedLine(e);
+    return '<div class="brow k-'+e.kind+'" data-h="'+esc(e.handle)+'"><i title="'+esc(new Date(e.at*1000).toLocaleString())+'">'+agoShort(e.at)+'</i>'+boardFace(e.look)+
+      '<div class="fwho">'+whoTag(e.handle)+'<span class="what">'+ic+" "+what+'</span><span>'+sub+'</span></div></div>'; }).join("")+'</div>';
+  fillFaces(box); wireProfiles(box);
 }
 function drawBoard(k, d){
   const box = $("board-list"); if(!box || boardKey!==k) return;
-  if(!d.rows.length){ box.innerHTML = '<p class="note">nobody yet. it could be you.</p>'; return; }
-  const row = (r, rank) => { const [v, sub] = boardValue(k, r); return '<tr'+(r.me ? ' class="me"' : "")+'><td class="rk">'+(rank<=3 ? ["🥇","🥈","🥉"][rank-1] : rank)+'</td><td>'+whoTag(r.handle)+'</td><td class="v">'+v+'<span>'+sub+'</span></td></tr>'; };
-  box.innerHTML = '<table class="board">'+d.rows.map(r=>row(r, r.rank)).join("")+'</table>'+
-    (d.me && !d.rows.some(r=>r.me) ? '<p class="note">you\'re #'+d.me.rank+' of '+d.total+'.</p>' : d.total > d.rows.length ? '<p class="note">'+d.total+' on this board.</p>' : "");
+  if($("board-what")) $("board-what").innerHTML = boardInfo(k)[1]+"."+(d.total ? ' <b class="board-n">'+d.total+' on this board</b>' : "");
+  const MEDAL = ["🥇","🥈","🥉"];
+  const pod = n => { const r = d.rows[n-1];
+    if(!r) return '<div class="pod p'+n+' open"><span class="bface big"><i>?</i></span><b class="who">open</b><em>could be you</em><div class="plinth">'+n+'</div></div>';
+    const [v, sub] = boardValue(k, r);
+    return '<div class="pod p'+n+(r.me ? " me" : "")+'" data-h="'+esc(r.handle)+'">'+(n===1 ? '<u class="crown">👑</u>' : "")+boardFace(r.look, "big")+'<s>'+MEDAL[n-1]+'</s>'+
+      '<b class="who">'+whoTag(r.handle)+'</b><em>'+v+'</em><span>'+sub+'</span><div class="plinth">'+n+'</div></div>'; };
+  const row = r => { const [v, sub] = boardValue(k, r);
+    return '<div class="brow'+(r.me ? " me" : "")+'" data-h="'+esc(r.handle)+'"><i>'+r.rank+'</i>'+boardFace(r.look)+'<b>'+whoTag(r.handle)+(r.me ? ' <u>you</u>' : "")+'</b><em>'+v+'<span>'+sub+'</span></em></div>'; };
+  const me = d.me, gap = me ? boardGap(k, me) : "";
+  const mine = me ? '<div class="board-you'+(me.rank<=3 ? " top" : "")+'"'+(acct() ? ' data-h="'+esc(acct().handle)+'"' : "")+'>'+boardFace(me.look)+
+      '<div><u>your standing</u><b>#'+me.rank+' <small>of '+d.total+'</small></b>'+(gap ? '<span>'+gap+'</span>' : "")+'</div>'+
+      '<em>'+boardValue(k, Object.assign({ detail:{} }, me, (d.rows.find(r=>r.me)||{})))[0]+'</em></div>' : "";
+  box.innerHTML = (d.rows.length ? "" : '<p class="note board-empty">nobody yet. the top spot is open.</p>')+
+    '<div class="podium">'+[2,1,3].map(pod).join("")+'</div>'+mine+
+    (d.rows.length > 3 ? '<div class="brows">'+d.rows.slice(3).map(row).join("")+'</div>' : "")+
+    (d.total > d.rows.length ? '<p class="note">the top '+d.rows.length+' of '+d.total+'.</p>' : "");
+  fillFaces(box); wireProfiles(box);
+}
+
+/* ---------- a player's card: who they play as, how big their network is, where they stand ---------- */
+async function openProfile(handle){
+  openModal('<div class="prof skel"><span class="bface big"></span><b></b><em></em></div>');
+  const r = await api("/api/net/profile?h="+encodeURIComponent(handle));
+  if($("modal").classList.contains("hidden")) return;
+  if(r.status!==200){ openModal('<h2>'+whoTag(handle)+'</h2><p class="note">'+(r.status===404 ? "they haven't synced a network yet." : "their card can't be reached right now.")+'</p><div class="row"><button class="btn small" data-close>close</button></div>'); return; }
+  const p = r.data, f = boardLook(p.look), K = KINDS[f ? f.kind : "milady"];
+  const tile = (label, v, sub) => '<div class="pcell"><u>'+label+'</u><b>'+v+'</b>'+(sub ? '<span>'+sub+'</span>' : "")+'</div>';
+  const nn = p.online ? (p.epochs ? "♾️ "+p.epochs : "🌐 on") : p.stage+" / "+NEWNET.length;
+  const order = Object.keys(BOARD_INFO).filter(k=>p.ranks[k]).concat(CHALLENGES.map(c=>"ch_"+c.id).filter(k=>p.ranks[k]));
+  const relics = RELICS.filter(x=>p.relics[x.id]).sort((a, b)=>p.relics[b.id]-p.relics[a.id]);
+  const run = x => { const ch = x.challenge && byId(CHALLENGES, x.challenge);
+    return '<div class="prun"><i>#'+x.n+'</i><b>'+fmtTime(x.t)+'</b><span>peak '+fmt(x.peak||0)+' · +'+fmt(x.grass||0)+' 🌿</span>'+(ch ? '<u class="'+(x.beaten ? "won" : "")+'">'+(x.beaten ? "✅ " : "")+ch.name+'</u>' : "<u></u>")+'</div>'; };
+  openModal('<div class="prof">'+
+      '<canvas id="prof-cv" class="portrait" width="'+K.w+'" height="'+K.h+'"></canvas>'+
+      '<h2>'+whoTag(p.handle)+(acct() && acct().handle===p.handle ? ' <small class="you-tag">you</small>' : "")+'</h2>'+
+      '<p class="note">'+(p.born ? "playing since "+new Date(p.born).toLocaleDateString()+" · " : "")+(agoShort(p.saved)==="now" ? "synced just now" : "last synced "+agoShort(p.saved)+" ago")+(p.online ? " · 🌐 online since "+new Date(p.online).toLocaleDateString() : "")+'</p>'+
+      '<div class="pgrid">'+tile("network", fmt(p.miladys), "miladys now")+tile("runs", fmt(p.runs), "touched grass")+tile("played", fmtTime(p.played))+
+        tile("grass", fmt(p.grass), "earned signed in")+tile("new internet", nn, p.online ? (p.epochs ? "epochs past the end" : "online") : "stages")+tile("achievements", p.ach+" / "+ACHIEVEMENTS.length)+'</div>'+
+      (order.length ? '<div class="box-h">on the boards</div><div class="pranks">'+order.map(k=>{ const x = p.ranks[k];
+        return '<button class="prank'+(x.rank<=3 ? " top r"+x.rank : "")+'" data-pb="'+k+'"><i>'+(x.rank<=3 ? ["🥇","🥈","🥉"][x.rank-1] : "#"+x.rank)+'</i><b>'+boardInfo(k)[0]+'</b><span>'+boardValue(k, Object.assign({ detail:{} }, x))[0]+' · of '+x.total+'</span></button>'; }).join("")+'</div>' : "")+
+      (relics.length ? '<div class="box-h">relics <span>'+relics.length+' of '+RELICS.length+'</span></div><div class="prelics">'+relics.map(x=>'<span title="'+esc(x.name)+'">'+x.icon+(p.relics[x.id]>1 ? '<sub>'+p.relics[x.id]+'</sub>' : "")+'</span>').join("")+'</div>' : "")+
+      (p.last.length ? '<div class="box-h">last runs</div><div class="pruns">'+p.last.map(run).join("")+'</div>' : "")+
+    '</div><div class="row"><button class="btn small" data-close>close</button></div>');
+  $("modal-panel").querySelectorAll("[data-pb]").forEach(b=>b.onclick = ()=>{
+    const k = b.dataset.pb; if(k.startsWith("ch_")) boardCh = k.slice(3);
+    boardKey = k; closeModal(); if(tab!=="boards"){ tab = "boards"; } refresh(true); });
+  if(f) compose(f.look, false, f.kind).then(cv=>{ const c = $("prof-cv"); if(c) c.getContext("2d").drawImage(cv, 0, 0); }).catch(()=>{});
 }
 
 /* ---------- the app: installs, and plays offline ---------- */

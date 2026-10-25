@@ -252,7 +252,7 @@ const AMBIENT = (()=>{
       }
     }
   }
-  const nnSink = () => nnOpen(S) && !S.ended && S.nn.on ? { x:you.x, y:you.y } : null;
+  const nnSink = () => nnOpen(S) && S.nn.on ? { x:you.x, y:you.y } : null;
 
   /* ---------- drawing ---------- */
   function text(s, x, y, o){
@@ -291,7 +291,7 @@ const AMBIENT = (()=>{
     // the new internet, while it's being poured into: a ring round you that fills
     const sink = nnSink();
     if(sink){
-      const st = NEWNET[S.nn.i], need = Object.keys(st.need), done = need.reduce((a, k)=>a + Math.min(1, (S.nn.got[k]||0)/st.need[k]), 0)/need.length;
+      const st = nnStage(S), need = Object.keys(st.need), done = need.reduce((a, k)=>a + Math.min(1, (S.nn.got[k]||0)/st.need[k]), 0)/need.length;
       const rr = you.s*0.7;
       cx.lineWidth = 4; cx.strokeStyle = "rgba(255,255,255,0.10)"; cx.beginPath(); cx.arc(sink.x, sink.y, rr, 0, 7); cx.stroke();
       cx.strokeStyle = "#8be9fd"; cx.shadowColor = "#8be9fd"; cx.shadowBlur = 12;

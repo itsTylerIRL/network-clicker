@@ -26,6 +26,7 @@ As on [the cancel is coming](https://cancel.tylerirl.com)'s character screen: pi
 - **Every reset opens a layer.** The first time you touch grass: **the stack**, with compute, devs, data centers, and agents that put new Miladys straight to work. The second: **network spirituality**, with devotion, acolytes, and rituals (summon the bull, an airdrop, a vigil), and **Remilios** start joining the network. The third: **raids**, sending Miladys out to the replies, a rival discord, crypto twitter, the timeline, or the cancel itself, for loot and 24 **relics** you keep forever and level up. The fourth: **the cathedral**, ten stages tall, built from ether. The fifth: **challenges**, runs with a rule bent (no posting, a bear market all run, a small world, no upgrades, a speedrun) for rewards that last. The sixth: **the new internet**.
 - **Robots.** Later perks buy automation: a meme machine, grad students who research, a personal shopper for upgrades, and scripts that build out of whatever's spare (keeping back a reserve you choose, and skipping any building you tell them to). Each has an off switch on the network tab.
 - **The ending.** The new internet is seven stages (the protocol, the nodes, the mesh, the handshake, the namespace, the archive, and the new internet itself), each filled by pouring resources in: a share of what you make, and everything that would overflow. What goes in stays when you touch grass, every stage is a bonus for good, and the last one needs the cathedral standing. Turn it on and the network gathers into a globe, the story of it plays, and then you can keep posting.
+- **Epochs.** Past the ending the new internet keeps growing, an epoch at a time, poured into the same way. There's no last one: each asks for half again what the one before did, from a different mix of resources, and each is +10% everything for good.
 
 It saves itself in your browser and keeps going while you're away (8 hours, or 24 with a perk).
 
@@ -35,7 +36,7 @@ Sign in with **RemiliaNET** or **Urbit ID** (the same sign-in as [the cancel is 
 
 Settings come in two kinds. Sound, effects volume, the animated backdrop, calm, her face reacting, ambient mode and notifications belong to the device, so a phone that lags can run without the backdrop while the desktop keeps it; everything else (how numbers are written, wearing relics) goes with the network.
 
-Signed-in players are on the **boards**: fastest run to the infinite garden (challenges don't count), most grass earned, biggest network, and who turned on the new internet first.
+Signed-in players are on the **boards**: fastest run to the infinite garden (challenges don't count), most grass earned, biggest network, who turned on the new internet first, uptime (the most epochs past the ending), and the fastest clear of each challenge. The top three stand on a podium wearing their own characters, everyone else has a face in the list, and your own standing says how far it is to the next place up. **Lately** is a feed of what's happened: runs finished, challenges beaten, the new internet turned on, epochs reached. Tap anyone, on a board or in the feed, for their card: who they play as, how big their network is, where they stand on every board, their relics and their last runs.
 
 Saves can't be downloaded, pasted or loaded from a file any more, since that would let anyone put anything on the boards. The game runs in the browser, so nothing is proven, but the service holds every save against the last one it accepted: time played can't outrun the clock, counters only go up, runs have to take a plausible while and make plausible grass, and grass can't be spent that wasn't earned. A save that doesn't add up is refused and the device goes back to the last good one. Only runs started after an account was linked count on the boards.
 
@@ -57,6 +58,8 @@ Hover a resource (or tap it) to see where it comes from. Every price says how lo
 
 The clock in the top bar counts which market cycle this run is on and how long it's gone; click it for the stats tab, with every cycle you've played, time in all, a graph of any resource (or the network's size) across the run, and every past run in a table and a bar chart, with your fastest marked.
 
+There's music, made on the spot like the sounds: a slow pad of chords and a few notes over it in the market's key, the same scale your posts play in, bright in mania and low in a bear market. It has its own volume in settings (all the way down is off), follows mute, and stops while the tab is in the background.
+
 Your Milady wears the relics you find, and her face reacts to what happens, from the Milady trait layers: she talks when you post, beams when you build, studies when you research, sparkles at a sparkle, tears up at drama, cries when someone logs off, goes hearts-in-her-eyes at an achievement, spirals in a frenzy, blinks, and dozes off if you leave her alone. That can be switched off in settings.
 
 ## Running it yourself
@@ -71,6 +74,6 @@ python3 -m http.server
 
 The accounts and boards are `server/network_api.py`, a module the cancel game's service (`server/server.py` in [cancel](https://github.com/itsTylerIRL/cancel)) loads if it's beside it: copy it there with `server/net_spec.json` (perk costs, written by `build.py`), add this site to `CANCEL_ORIGINS`, and give `/api/net/` a bigger request size in nginx (a save is about 30 KB gzipped). Point the game at another service with `localStorage.network_api`.
 
-The content (resources, jobs, buildings, research, upgrades, perks, achievements) is all in `js/data.js`. The engine and the page are `js/game.js`. How it moves (the network backdrop, the market's weather, petals and confetti) is `js/fx.js`.
+The content (resources, jobs, buildings, research, upgrades, perks, achievements) is all in `js/data.js`. The engine and the page are `js/game.js`. How it moves (the network backdrop, the market's weather, petals and confetti) is `js/fx.js`. Ambient mode is `js/ambient.js`, and the music `js/music.js`.
 
 official remilia trait assets · copyleft · not affiliated · [tylerirl.com](https://tylerirl.com/)

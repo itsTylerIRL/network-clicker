@@ -22,5 +22,12 @@
   "autotech": 12,
   "autobuild": 15,
   "autoup": 12
- }
+ },
+ "challenges": [
+  "logoff",
+  "bear",
+  "small",
+  "frugal",
+  "speed"
+ ]
 }
