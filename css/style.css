@@ -149,7 +149,7 @@ h1.game-title .is{color:var(--neon);text-shadow:0 0 18px rgba(139,233,253,.9);di
   #tabs{flex:none;margin-bottom:0;}
   #tab-body{flex:1;min-height:0;overflow-y:auto;padding:14px;margin:-2px -14px -14px;} /* the same room for the highlight */
   /* her picture beside the post button, so the feed keeps its room */
-  .side #you-box{display:grid;grid-template-columns:minmax(118px,40%) 1fr;gap:6px 12px;align-items:start;text-align:left;}
+  .side #you-box{display:grid;grid-template-columns:minmax(118px,40%) 1fr;gap:6px 12px;align-items:stretch;text-align:left;}
   .side #you-wrap{width:100%;margin:0;}
   .side .buffs{justify-content:flex-start;margin:0;}
   .side #btn-meme{align-self:start;padding:8px 4px;font-size:10.5px;letter-spacing:0;white-space:nowrap;}
@@ -276,8 +276,8 @@ canvas.portrait{width:min(240px,60vw);height:auto;display:block;margin:0 auto 8p
   .layout{display:flex;flex-direction:column;align-items:stretch;}
   .side{display:contents;}
   #you-box{order:1;} .side>.box:nth-child(2){order:2;} .main{order:3;min-height:0;} #log-box{order:4;}
-  #you-box{display:grid;grid-template-columns:110px 1fr;gap:4px 12px;align-items:start;text-align:left;}
-  #you-wrap{width:110px;}
+  #you-box{display:grid;grid-template-columns:110px 1fr;gap:4px 12px;align-items:stretch;text-align:left;}
+  #you-wrap{width:110px;} .you-left .you-sync{font-size:10px;gap:5px;} .you-left .you-who{font-size:11px;}
   .buffs{justify-content:flex-start;margin:0;}
   .grid{grid-template-columns:1fr 1fr;}
   .card{min-height:0;padding:8px 10px;}
@@ -799,11 +799,14 @@ body.calm .pod,body.calm .pod .crown,body.calm .pod .bface::after,body.calm .bro
 .you-who{display:flex;justify-content:center;margin:8px 0 0;font-size:12px;min-width:0;}
 .you-who:empty{display:none;}
 .you-who .vtag{padding:3px 9px;border-radius:999px;border:1px solid currentColor;background:rgba(0,0,0,.35);max-width:100%;}
-.side .you-who{justify-content:flex-start;margin:0;align-self:start;}
+.side .you-who{margin:0;}
 /* beside your milady: your name, whether it's on your account, four numbers, your best place on a board */
 .you-side{display:flex;flex-direction:column;gap:6px;min-width:0;margin-top:8px;}
 .side .you-side{margin-top:0;}
-.you-side .you-who{margin:0;}
+/* under her: your name and whether it's on your account */
+.you-left{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;}
+.you-left .you-who{margin:0;max-width:100%;justify-content:center;align-self:center;}
+.you-left .you-sync{justify-content:center;max-width:100%;}
 .you-sync{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);min-width:0;}
 .you-sync span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .you-sync i{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dim);}
@@ -813,8 +816,8 @@ body.calm .pod,body.calm .pod .crown,body.calm .pod .bface::after,body.calm .bro
 .you-sync.bad{color:#ff9b9b;} .you-sync.bad i{background:var(--red);} .you-sync.off i{background:transparent;border:1px solid var(--dim);}
 .you-sync:hover span,.you-sync:focus-visible span{text-decoration:underline;}
 @keyframes syncblink{50%{opacity:.25;}}
-.you-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;}
-.you-stats>div{border:1px solid var(--line);border-radius:6px;background:rgba(139,233,253,.04);padding:5px 8px;min-width:0;display:flex;flex-direction:column;}
+.you-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:1fr;gap:5px;flex:1;} /* the tiles grow to fill beside her */
+.you-stats>div{border:1px solid var(--line);border-radius:6px;background:rgba(139,233,253,.04);padding:5px 8px;min-width:0;display:flex;flex-direction:column;justify-content:center;}
 .you-stats u{text-decoration:none;font-family:var(--label);text-transform:uppercase;letter-spacing:.12em;font-size:8.5px;color:var(--dim);}
 .you-stats b{font-size:15px;color:var(--txt);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;}
 .you-stats>div:first-child b{color:var(--pink);} .you-stats>div:last-child b{color:var(--acid);}
