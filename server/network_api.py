@@ -8,7 +8,7 @@ same signed session works here, so a player is the same person in both games. Ro
   POST /api/net/save       {session, rev, gz|json}   -> the new revision, or 409 (another device saved since: here's
                                                          theirs) or 422 (that doesn't add up: here's the last good one)
   GET  /api/net/board      ?b=fastest|grass|network|online [&limit=] [&player=]
-  GET  /api/net/summary    ?player=                  -> a few numbers about the account's network, for the cancel game's card
+  GET  /api/net/summary    ?player=                  -> a few numbers about the account's network, and who they play as, for the cancel game's card
 
 The game runs in the browser, so a save can't be proven. Each one is held against the last one this service
 accepted: time played can't grow faster than time passes, counters only go up, a run has to take a plausible
@@ -275,7 +275,17 @@ def summary(player):
     s = unpack_stored(row["data"])
     return {"ok": True, "started": True, "saved": row["saved"], "miladys": len(s.get("miladys") or []),
             "runs": int(g(s, "stats", "resets")), "stage": int(g(s, "nn", "i")), "online": bool(s.get("ended")),
-            "played": round(g(s, "stats", "played")), "ranks": r}
+            "played": round(g(s, "stats", "played")), "look": look(s), "ranks": r}
+
+
+def look(s):
+    """Who they play as there, as the cancel game reads a character: the collection, its trait layers and eye color."""
+    you, who = s.get("you"), s.get("who") if isinstance(s.get("who"), dict) else {}
+    if not isinstance(you, dict) or not you:
+        return None
+    layers = {k: v for k, v in you.items() if isinstance(k, str) and isinstance(v, str) and len(k) <= 40 and len(v) <= 80 and not k.startswith("_")}
+    return {"cfg": "Remilio" if who.get("kind") == "remilio" else "Milady", "layers": dict(list(layers.items())[:20]),
+            "eye": who.get("eye") if isinstance(who.get("eye"), str) else ""}
 
 
 # ---------- the routes ----------
