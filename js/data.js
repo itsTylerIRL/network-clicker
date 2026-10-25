@@ -273,6 +273,7 @@ const PERKS = [
   { id:"roots",     name:"deep roots",      cost:15, fx:{grassEach:0.01}, desc:"every grass you hold is worth 4% instead of 3%.", ng:3 },
   { id:"photo",     name:"photosynthesis",  cost:12, fx:{grass:0.25},    desc:"+25% grass every time you touch it.", ng:2 },
   /* automation: the late runs play themselves a little. Each can be switched off on the network tab. */
+  { id:"balance",   name:"middle management", cost:5, fx:{}, auto:"balance", desc:"🤖 keeps your miladys spread evenly across every job you tick, new arrivals and all. switch it off, or leave a job out, to set them yourself.", ng:1 },
   { id:"automeme",  name:"meme machine",    cost:8,  fx:{}, auto:"meme",  desc:"🤖 once vibes are nearly full, the spare ones are memed for you.", ng:2 },
   { id:"autotech",  name:"grad students",   cost:12, fx:{}, auto:"tech",  desc:"🤖 research does itself, the cheapest first.", ng:3 },
   { id:"autobuild", name:"scripts",         cost:15, fx:{}, auto:"build", desc:"🤖 buildings buy themselves out of what's spare, the cheapest for your storage first.", ng:3 },

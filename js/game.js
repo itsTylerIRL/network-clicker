@@ -56,7 +56,7 @@ function fresh(keep){
     timers:{ arrive:0, leave:0, sparkle:60, drama:180, auto:0, feed:40, bot:0 },
     run:{ cult:0, start:Date.now(), auto:{ b:0, t:0, u:0, m:0 } },
     nn:{ i:0, got:{}, on:true, share:0.5 }, ended:0, endSeen:false,
-    auto:{ build:true, tech:true, up:true, meme:true, rite:true, raid:true, wonder:true, grass:true, keep:0.25, skip:{},
+    auto:{ build:true, tech:true, up:true, meme:true, rite:true, raid:true, wonder:true, grass:true, balance:true, keep:0.25, skip:{}, noBal:{}, // noBal: jobs middle management leaves to you
       rites:{ prayer:true, hyperpost:true, airdrop:true, vigil:true, meetup:false, bull:false } }, // which rituals the choirmaster holds
     grass:0, perks:{}, ach:{}, relics:{}, chDone:{}, challenge:null,
     cd:{}, raids:[], wonder:0, autoJob:"poster", seenNew:{}, history:[], born:Date.now(),
@@ -303,7 +303,7 @@ function finishStage(s, live){
 /* ---------- automation: the robots the late runs buy ---------- */
 function automate(s, R, dt, live){
   const p = s.perks, a = s.auto;
-  if(!p.automeme && !p.autotech && !p.autobuild && !p.autoup && !p.autorite && !p.autoraid && !p.autowonder) return;
+  if(!p.automeme && !p.autotech && !p.autobuild && !p.autoup && !p.autorite && !p.autoraid && !p.autowonder && !p.balance) return;
   s.timers.bot = (s.timers.bot||0) + dt;
   if(s.timers.bot < 1) return;
   const n = Math.min(20, Math.floor(s.timers.bot)); s.timers.bot -= n; // one go a second (a long step offline gets a few)
@@ -311,6 +311,7 @@ function automate(s, R, dt, live){
   const room = c => Math.max(...Object.keys(c).map(k=>c[k]/R.cap[k])); // how much of your storage it takes
   const cheapest = list => list.sort((x, y)=>room(x.c) - room(y.c))[0];
   const ct = s.run.auto, did = { m:0, t:[], u:[], b:{}, x:[] }; // what this go bought, for ambient mode's cards
+  if(p.balance && a.balance) balanceJobs(s);
   for(let i=0; i<n; i++){
     if(p.automeme && a.meme && s.res.vibes >= R.cap.vibes*0.9){
       const m = Math.min(Math.floor((s.res.vibes - R.cap.vibes*0.6)/MEME_COST), Math.floor(R.cap.memes - s.res.memes));
@@ -346,6 +347,23 @@ function automate(s, R, dt, live){
     }
   }
   if(live && typeof AMBIENT!=="undefined" && AMBIENT.on) AMBIENT.bot(did);
+}
+
+/* middle management: every job you tick gets the same share of who's home, the extra one or two going to the first
+   jobs on the list. Only as many move as have to: from the jobs over their share to the ones under it. Raiders are
+   left alone until they're back; a job you untick is left to you entirely. */
+const balanced = s => JOBS.filter(j=>shownIn(s, j) && !s.auto.noBal[j.id]);
+function balanceJobs(s){
+  const jobs = balanced(s); if(!jobs.length) return 0;
+  const ids = new Set(jobs.map(j=>j.id)), pool = s.miladys.filter(m=>!m.away && (!m.job || ids.has(m.job)));
+  const per = Math.floor(pool.length/jobs.length), extra = pool.length % jobs.length, want = {}, on = {};
+  jobs.forEach((j, i)=>{ want[j.id] = per + (i < extra ? 1 : 0); on[j.id] = []; });
+  const free = [];
+  for(const m of pool) (m.job ? on[m.job] : free).push(m);
+  for(const j of jobs) while(on[j.id].length > want[j.id]) free.push(on[j.id].pop()); // the newest on a crowded job move first
+  let moved = 0;
+  for(const j of jobs) while(on[j.id].length < want[j.id] && free.length){ const m = free.pop(); if(m.job !== j.id){ m.job = j.id; moved++; } on[j.id].push(m); }
+  return moved;
 }
 
 /* ---------- graphs: what you held, through the run ---------- */
@@ -1200,7 +1218,7 @@ function buildNetwork(body){
 }
 /* the robots you've bought, each with an off switch, and how much they've done this run */
 const AUTO_WHAT = { meme:["automeme","🐸 memes"], tech:["autotech","📜 research"], up:["autoup","✨ upgrades"], build:["autobuild","🏗️ buildings"],
-  rite:["autorite","🕯️ rituals"], raid:["autoraid","⚔️ raids"], wonder:["autowonder","⛪ cathedral"], grass:["gardener","🌿 touching grass"] };
+  rite:["autorite","🕯️ rituals"], raid:["autoraid","⚔️ raids"], wonder:["autowonder","⛪ cathedral"], grass:["gardener","🌿 touching grass"], balance:["balance","⚖️ even jobs"] };
 function autoBox(){
   const a = S.auto, box = el("div", "auto-box");
   box.innerHTML = '<span class="auto-h">🤖 automation</span>'+
@@ -1208,12 +1226,20 @@ function autoBox(){
     (S.perks.autobuild ? '<span class="seg" title="what buildings never dip into">keep '+[0, 0.25, 0.5].map(v=>'<button class="pick'+(a.keep===v ? " on" : "")+'" data-keep="'+v+'">'+pct(v)+'</button>').join("")+'</span>'+
       '<button class="btn small" id="auto-skip">'+(Object.values(a.skip).some(Boolean) ? "skipping "+Object.values(a.skip).filter(Boolean).length : "skip some")+'</button>' : "")+
     (S.perks.autorite ? '<button class="btn small" id="auto-rites">which rituals</button>' : "")+
+    (S.perks.balance ? '<button class="btn small" id="auto-bal">which jobs</button>' : "")+
     '<span class="auto-ct" id="auto-ct"></span>';
   box.querySelectorAll("[data-auto]").forEach(b=>b.onclick = ()=>{ a[b.dataset.auto] = !a[b.dataset.auto]; refresh(true); });
   box.querySelectorAll("[data-keep]").forEach(b=>b.onclick = ()=>{ a.keep = +b.dataset.keep; refresh(true); });
   const skip = box.querySelector("#auto-skip"); if(skip) skip.onclick = openSkip;
   const rites = box.querySelector("#auto-rites"); if(rites) rites.onclick = openRites;
+  const bal = box.querySelector("#auto-bal"); if(bal) bal.onclick = openBalJobs;
   return box;
+}
+function openBalJobs(){
+  openModal('<h2>⚖️ what middle management spreads</h2><p class="note">every ticked job gets the same share of the miladys at home. untick one and it\'s yours to set: nobody is moved on or off it.</p><div class="skip-list">'+
+    JOBS.filter(j=>shown(j)).map(j=>'<button class="tog'+(S.auto.noBal[j.id] ? "" : " on")+'" data-bal="'+j.id+'">'+j.icon+" "+j.name+'</button>').join("")+
+    '</div><div class="row"><button class="btn small" data-close>done</button></div>');
+  document.querySelectorAll("#modal [data-bal]").forEach(x=>x.onclick = ()=>{ const id = x.dataset.bal; S.auto.noBal[id] = !S.auto.noBal[id]; x.classList.toggle("on", !S.auto.noBal[id]); sig = ""; });
 }
 function openRites(){
   openModal('<h2>🤖 what the choirmaster holds</h2><p class="note">each ticked ritual is held the moment it\'s ready and there\'s devotion for it. summon the bull moves the market, and a meetup can fill the room, so those start off.</p><div class="skip-list">'+
@@ -1235,6 +1261,15 @@ function buildMiladys(body){
   const head = el("div", "pop-head");
   head.innerHTML = '<span id="pop-count"></span><span id="pop-idle"></span><span id="pop-away"></span><span id="pop-happy"></span>';
   body.appendChild(head);
+  if(S.perks.balance){ // middle management: the switch, right where the jobs are
+    const row = el("div", "auto-row bal-row"), n = balanced(S).length;
+    row.innerHTML = '<button class="tog'+(S.auto.balance ? " on" : "")+'" id="bal-on">'+(S.auto.balance ? "⚖️ even jobs: on" : "⚖️ even jobs: off")+'</button>'+
+      '<span class="note">'+(S.auto.balance ? "middle management keeps them spread evenly across "+n+" job"+(n===1 ? "" : "s")+". changes you make here get evened out." : "switched off: the jobs are yours to set.")+'</span>'+
+      '<button class="btn small" id="bal-jobs">which jobs</button>';
+    body.appendChild(row);
+    row.querySelector("#bal-on").onclick = ()=>{ S.auto.balance = !S.auto.balance; if(S.auto.balance) balanceJobs(S); refresh(true); };
+    row.querySelector("#bal-jobs").onclick = openBalJobs;
+  }
   if(R.f.autoassign){
     const row = el("div", "auto-row");
     row.innerHTML = '<span>🤖 new arrivals go straight to</span><select id="auto-job" class="name-in">'+

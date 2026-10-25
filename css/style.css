@@ -447,6 +447,7 @@ body.calm .res-row .rbar u,body.calm #log .ln,body.calm h1.game-title .is,body.c
 .unlock-note{border-left:2px solid var(--acid);padding-left:10px;}
 .big-note{text-align:center;font-size:18px;color:var(--gold);margin:18px 0;}
 .auto-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;margin:0 0 10px;color:#ccc;}
+.bal-row{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:rgba(139,233,253,.04);} .bal-row .note{flex:1;min-width:180px;}
 .auto-row select{padding:5px 8px;}
 .card.active{border-color:var(--gold);box-shadow:0 0 18px rgba(241,250,140,.2);}
 /* a ritual's cooldown, a raid on its way home */
