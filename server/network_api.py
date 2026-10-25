@@ -8,6 +8,7 @@ same signed session works here, so a player is the same person in both games. Ro
   POST /api/net/save       {session, rev, gz|json}   -> the new revision, or 409 (another device saved since: here's
                                                          theirs) or 422 (that doesn't add up: here's the last good one)
   GET  /api/net/board      ?b=fastest|grass|network|online [&limit=] [&player=]
+  GET  /api/net/summary    ?player=                  -> a few numbers about the account's network, for the cancel game's card
 
 The game runs in the browser, so a save can't be proven. Each one is held against the last one this service
 accepted: time played can't grow faster than time passes, counters only go up, a run has to take a plausible
@@ -264,6 +265,19 @@ def board(b, limit, player):
         for i, r in enumerate(rows)]}
 
 
+def summary(player):
+    """What the cancel game shows on a player's card: how big the network is, and how far along. Nothing a board doesn't."""
+    with H["db"]() as con:
+        row = con.execute("SELECT data, saved FROM net_saves WHERE player=?", (player,)).fetchone()
+        r = ranks(con, player)
+    if not row:
+        return {"ok": True, "started": False}
+    s = unpack_stored(row["data"])
+    return {"ok": True, "started": True, "saved": row["saved"], "miladys": len(s.get("miladys") or []),
+            "runs": int(g(s, "stats", "resets")), "stage": int(g(s, "nn", "i")), "online": bool(s.get("ended")),
+            "played": round(g(s, "stats", "played")), "ranks": r}
+
+
 # ---------- the routes ----------
 
 def body(h, limit):
@@ -346,6 +360,11 @@ def store(player, handle, cur, base, now):
 def handle_get(h, path, one):
     if path == "/api/net/health":
         return h.send(200, {"ok": True, "rn": H["rn_on"], "ur": H["ur_on"]})
+    if path == "/api/net/summary":
+        player = one("player")
+        if not (player and len(player) <= 32 and player.isalnum()):
+            return h.send(400, {"error": "which player?"})
+        return h.send(200, summary(player))
     if path == "/api/net/board":
         b = one("b") or "fastest"
         if b not in BOARDS:
