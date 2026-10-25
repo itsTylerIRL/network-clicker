@@ -211,7 +211,7 @@ function tick(s, dt, live){
   const after = Math.floor(s.phaseT/PHASE_SECS);
   if(after!==before){
     if(after % PHASES.length===0){ s.cycle++; s.stats.cycles++; }
-    if(live && !rule(s, "bear")){ const p = phase(s); FX.phase(p); react({ mania:"hype", bear:"worry", dist:"smug", accum:"calm" }[p.id]); log(p.icon+" the market turns: <b style='color:"+p.color+"'>"+p.name+"</b>. "+p.desc+"."); }
+    if(live && !rule(s, "bear")){ const p = phase(s); FX.phase(p); cue("phase"); react({ mania:"hype", bear:"worry", dist:"smug", accum:"calm" }[p.id]); log(p.icon+" the market turns: <b style='color:"+p.color+"'>"+p.name+"</b>. "+p.desc+"."); }
   }
 
   // miladys turn up while there's room and something to eat; they leave when there isn't
@@ -286,13 +286,13 @@ function finishStage(s, live){
   s.nn.got = {};
   if(s.ended){
     s.nn.e = (s.nn.e||0) + 1;
-    if(live){ sfx.shiny(); FX.research(); react("love"); log("♾️ the new internet: <b>"+st.name+"</b> is done. "+fxDesc(st.fx)+", for good."); }
+    if(live){ sfx.shiny(); FX.research(); react("love"); cue("stage"); log("♾️ the new internet: <b>"+st.name+"</b> is done. "+fxDesc(st.fx)+", for good."); }
     return;
   }
   s.nn.i++;
   if(s.nn.i >= NEWNET.length){ s.ended = Date.now(); s.endSeen = false; }
   if(!live) return;
-  sfx.shiny(); FX.research(); react("love");
+  sfx.shiny(); FX.research(); react("love"); cue("stage");
   log(st.icon+" the new internet: <b>"+st.name+"</b> is done. "+fxDesc(st.fx)+", for good.");
   if(s.ended) showEnding();
 }
@@ -400,7 +400,7 @@ function liveEvents(s, dt, R){
     s.timers.drama = 150 + rnd()*120;
     if(s.miladys.length >= 8 && rnd() < 0.35*Math.max(0, 1 - R.jobs.mod*0.1)){
       s.buffs.push({ kind:"drama", happy:-0.15, until:s.t+90 });
-      log("💢 drama in the group chat. -15% happiness for 90s."+(s.tech.moderation ? " mods would help." : ""), "bad"); react("drama");
+      log("💢 drama in the group chat. -15% happiness for 90s."+(s.tech.moderation ? " mods would help." : ""), "bad"); react("drama"); cue("drama");
     }
   }
   s.timers.feed -= dt;
@@ -584,6 +584,9 @@ const sfx = {
   shiny:()=>{ [880,1175,1568].forEach((f,i)=>setTimeout(()=>blip(f, 0.12, "sine", 0.06), i*70)); },
 };
 
+/* something happened that the music answers (music.js) */
+const cue = k => { if(typeof MUSIC!=="undefined") MUSIC.cue(k); };
+
 /* ---------- feed & toasts ---------- */
 function log(html, kind){
   S.log.unshift({ html, kind:kind||"", t:Date.now() });
@@ -723,7 +726,7 @@ function touchGrass(into){
     '<div class="row"><button class="btn big" id="grass-yes">touch grass 🌿</button><button class="btn small" data-close>not yet</button></div>');
   $("grass-yes").onclick = ()=>{
     doTouchGrass(into);
-    closeModal(); sfx.shiny(); FX.grass(); react("calm");
+    closeModal(); sfx.shiny(); FX.grass(); react("calm"); cue("grass");
     log("🌿 you touched grass. +"+g+" grass. the network starts again, and it remembers you. "+shareBtn(resets(S)));
     if(next) log("🔓 new: <b>"+next.name+"</b>. "+next.desc);
     if(met) log("✅ challenge beaten: <b>"+cur.name+"</b>. "+cur.rdesc+".");
@@ -765,7 +768,7 @@ function gardener(s, R, live){
   }
   if(!go) return;
   const t = s.runT, got = doTouchGrass(null, true);
-  if(live){ FX.grass(); log("🤖 🌿 the gardener touched grass after "+fmtTime(t)+": +"+got+" grass. "+shareBtn(resets(S))); refresh(true); }
+  if(live){ FX.grass(); cue("grass"); log("🤖 🌿 the gardener touched grass after "+fmtTime(t)+": +"+got+" grass. "+shareBtn(resets(S))); refresh(true); }
 }
 const RUN_MIN = 61; // a run shorter than a minute isn't taken by the account service (network_api.py, RUN_MIN)
 /* grass a second the gardener has been bringing in, from its last few runs: what time away is worth */
@@ -892,7 +895,8 @@ function doRitual(s, R, id){
   }
   return msg;
 }
-function ritualFx(id){ react(id==="bull" || id==="airdrop" ? "hype" : "pray"); if(id==="bull") FX.phase(PHASES[1]); }
+function ritualFx(id){ react(id==="bull" || id==="airdrop" ? "hype" : "pray"); if(id==="bull") FX.phase(PHASES[1]);
+  cue({ prayer:"glow", vigil:"glow", hyperpost:"frenzy", bull:"phase", airdrop:"sparkle", meetup:"raid" }[id]); }
 function holdRitual(id, card){
   const r = byId(RITUALS, id), msg = shown(r) ? doRitual(S, R, id) : null;
   if(msg==null) return sfx.no();
@@ -957,7 +961,7 @@ function raidHome(s, i, live){
     (relic ? " they found a relic: "+relic.icon+" <b>"+relic.name+"</b>"+(s.relics[relic.id]>1 ? " (level "+s.relics[relic.id]+")" : "")+"." : "");
   log(msg, lost.length ? "bad" : "");
   if(document.hidden) raidBack = true;
-  if(live){ toast(msg, 5000); if(relic) sfx.shiny(); react(relic ? "shiny" : "smug"); }
+  if(live){ toast(msg, 5000); if(relic) sfx.shiny(); react(relic ? "shiny" : "smug"); cue(relic ? "relic" : "raid"); }
 }
 
 /* ---------- the cathedral ---------- */
@@ -991,15 +995,15 @@ function spawnSparkle(){
   setTimeout(()=>sp.remove(), 13000);
 }
 function catchSparkle(){
-  S.stats.sparkles++; sfx.shiny(); react("shiny");
+  S.stats.sparkles++; sfx.shiny(); react("shiny"); cue("sparkle");
   const roll = rnd(), room = S.miladys.length < R.housing;
   let msg;
   if(roll < 0.25 && room){
     const m = newMilady(S, R); msg = "a stranger followed the sparkle in. <b>"+m.name+"</b> joined.";
   } else if(roll < 0.5){
-    S.buffs.push({ kind:"frenzy", click:6, until:S.t+30 }); msg = "posting frenzy: posts make 7× for 30s.";
+    S.buffs.push({ kind:"frenzy", click:6, until:S.t+30 }); msg = "posting frenzy: posts make 7× for 30s."; cue("frenzy");
   } else if(roll < 0.65){
-    S.buffs.push({ kind:"glow", happy:0.25, until:S.t+60 }); msg = "a glow comes over the network: +25% happiness for 60s.";
+    S.buffs.push({ kind:"glow", happy:0.25, until:S.t+60 }); msg = "a glow comes over the network: +25% happiness for 60s."; cue("glow");
   } else msg = "windfall: "+(windfall(90).join(" ") || "nothing fit. build more storage.");
   log("💎 "+msg); toast("💎 "+msg);
   update();
