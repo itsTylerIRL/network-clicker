@@ -792,7 +792,10 @@ a.vtag:hover b{text-decoration:underline;}
 .prun u{text-decoration:none;font-size:10px;color:var(--dim);} .prun u.won{color:var(--acid);}
 #modal-panel:has(.prof){max-width:560px;}
 /* the second tier and the gardener */
-.t2-bar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:6px 0 10px;}
+.t2-bar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:6px 0 10px;}
+.cheese-box{border:1px solid rgba(255,215,94,.45);border-radius:10px;background:linear-gradient(180deg,rgba(255,215,94,.07),rgba(255,215,94,.02));padding:12px;margin:12px 0;}
+.cheese-tag{font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid rgba(255,215,94,.6);color:#ffd75e;background:rgba(255,215,94,.08);font-weight:normal;}
+.cheese-box .nn-h b{color:#ffd75e;} .cheese-box #cw-give{border-color:rgba(255,215,94,.7);color:#ffd75e;}
 .t2-res{border:1px solid var(--line);border-radius:6px;background:rgba(139,233,253,.04);padding:7px 8px;display:flex;flex-direction:column;gap:1px;min-width:0;}
 .t2-res u{text-decoration:none;font-family:var(--label);text-transform:uppercase;letter-spacing:.12em;font-size:9px;color:var(--dim);}
 .t2-res b{font-size:16px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;} .t2-res em{font-style:normal;font-size:10px;color:var(--acid);min-height:13px;}

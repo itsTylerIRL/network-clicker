@@ -11,6 +11,7 @@ same signed session works here, so a player is the same person in both games. Ro
   GET  /api/net/summary    ?player=                  -> a few numbers about the account's network, and who they play as, for the cancel game's card
   GET  /api/net/recent     [?limit=]                 -> what's happened lately: runs finished, challenges beaten, the new internet turned on, epochs
   GET  /api/net/profile    ?h=handle                 -> a player's card: their network, where they stand on every board, their last runs
+  GET  /api/net/cheese                               -> every cheese patron and their level ({handle: level}), for the cancel's badges
   POST /api/net/card       {session, kind, n?, b?}   -> a share card of your network (net), a run (run, n), your place on a board (board, b)
                                                          or the ending (online)
   GET  /api/net/card/ID.png                          -> the card's picture, drawn here (net_card.py), never uploaded
@@ -44,6 +45,7 @@ GRASS_PER_MIN = 60         # the most grass a run can plausibly make per minute 
 GRASS_FREE = 200
 STAGES_PER_10MIN = 1       # stages of the new internet, at most, per ten minutes between syncs (plus one)
 EPOCHS_PER_10MIN = 10      # and epochs past the ending (each asks for half again the last, so a quick one is a cheap one)
+CHEESE_PER_HOUR = 3        # cheese patron levels, at most, per hour between syncs (plus one): the badge and $CULT it means are in the other game
 PERK_COST = {}             # perk id -> grass, from net_spec.json
 CHALLENGE_IDS = set()      # each challenge has a board of its own (ch_<id>), from net_spec.json too
 RECENT_KEEP = 300          # the feed keeps this many things that happened
@@ -80,7 +82,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS net_saves (
   player TEXT PRIMARY KEY, handle TEXT NOT NULL, data BLOB NOT NULL, rev INTEGER NOT NULL,
   saved INTEGER NOT NULL, linked INTEGER NOT NULL, linked_n INTEGER NOT NULL DEFAULT 0, linked_played REAL NOT NULL DEFAULT 0,
-  grass_total REAL NOT NULL DEFAULT 0, linked_e INTEGER NOT NULL DEFAULT 0
+  grass_total REAL NOT NULL DEFAULT 0, linked_e INTEGER NOT NULL DEFAULT 0, cheese INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS net_board (
   board TEXT NOT NULL, player TEXT NOT NULL, handle TEXT NOT NULL, value REAL NOT NULL, detail TEXT NOT NULL, at INTEGER NOT NULL,
@@ -110,8 +112,11 @@ def setup(helpers):
         print("network_api: no net_spec.json, so grass spent on perks isn't checked", flush=True)
     with H["db"]() as con:
         con.executescript(SCHEMA)
-        if "linked_e" not in [r[1] for r in con.execute("PRAGMA table_info(net_saves)")]:  # epochs came later: nobody had any yet
+        cols = [r[1] for r in con.execute("PRAGMA table_info(net_saves)")]
+        if "linked_e" not in cols:  # epochs came later: nobody had any yet
             con.execute("ALTER TABLE net_saves ADD COLUMN linked_e INTEGER NOT NULL DEFAULT 0")
+        if "cheese" not in cols:  # and cheese later still
+            con.execute("ALTER TABLE net_saves ADD COLUMN cheese INTEGER NOT NULL DEFAULT 0")
 
 
 class Refused(Exception):
@@ -185,6 +190,7 @@ def shape(s):
     num(g(s, "garden", "away"), 0, 1e15)
     for k in ("uplink", "seedbank"):
         num(g(s, "t2", "b", k), 0, 1e4)
+    num(g(s, "t2", "cheeseLv"), 0, 1e5)
     for r in s["history"]:
         if not isinstance(r, dict):
             raise Refused("a run is out of shape")
@@ -255,6 +261,10 @@ def check(prev, cur, dt, since_link, linked_played):
         raise Refused("epochs before the ending")
     if g(cur, "nn", "e") - g(prev, "nn", "e") > 1 + EPOCHS_PER_10MIN * dt / 600:
         raise Refused("the new internet went up too fast")
+    if g(cur, "t2", "cheeseLv") < g(prev, "t2", "cheeseLv"):
+        raise Refused("cheese went backwards")
+    if g(cur, "t2", "cheeseLv") - g(prev, "t2", "cheeseLv") > 1 + CHEESE_PER_HOUR * dt / 3600:
+        raise Refused("cheese given too fast")
     runs = new_runs(g(P, "resets"), cur)
     resets = g(N, "resets") - g(P, "resets")
     # more runs than the history keeps (the gardener, a long while between syncs): the ones it no longer lists still
@@ -391,7 +401,7 @@ def summary(player):
     s = unpack_stored(row["data"])
     return {"ok": True, "started": True, "saved": row["saved"], "miladys": len(s.get("miladys") or []),
             "runs": int(g(s, "stats", "resets")), "stage": int(g(s, "nn", "i")), "online": bool(s.get("ended")),
-            "played": round(g(s, "stats", "played")), "look": look(s), "ranks": r}
+            "played": round(g(s, "stats", "played")), "look": look(s), "ranks": r, "cheese": int(g(s, "t2", "cheeseLv"))}
 
 
 def recent(limit):
@@ -414,6 +424,7 @@ def profile(handle):
             "miladys": len(s.get("miladys") or []), "runs": int(g(s, "stats", "resets")), "played": round(g(s, "stats", "played")),
             "stage": int(g(s, "nn", "i")), "epochs": int(g(s, "nn", "e")), "online": g(s, "ended") or None,
             "grass": round(row["grass_total"]), "ach": len(s.get("ach") or {}), "relics": {k: v for k, v in s["relics"].items() if v},
+            "cheese": int(g(s, "t2", "cheeseLv")),
             "wonder": int(g(s, "wonder")), "challenges": sorted(k for k, v in (s.get("chDone") or {}).items() if v),
             "ranks": {b: dict(v, total=totals[b]) for b, v in r.items()}, "last": runs}
 
@@ -712,10 +723,10 @@ def store(player, handle, cur, base, now):
         grass_total = (row["grass_total"] if row else 0) + earned
         linked_e = row["linked_e"] if row else int(g(cur, "nn", "e"))
         rev = (row["rev"] if row else 0) + 1
-        con.execute("""INSERT INTO net_saves (player, handle, data, rev, saved, linked, linked_n, linked_played, grass_total, linked_e) VALUES (?,?,?,?,?,?,?,?,?,?)
+        con.execute("""INSERT INTO net_saves (player, handle, data, rev, saved, linked, linked_n, linked_played, grass_total, linked_e, cheese) VALUES (?,?,?,?,?,?,?,?,?,?,?)
                        ON CONFLICT(player) DO UPDATE SET handle=excluded.handle, data=excluded.data, rev=excluded.rev, saved=excluded.saved,
-                       grass_total=excluded.grass_total""",
-                    (player, handle, pack(cur), rev, now, linked, linked_n, linked_played, grass_total, linked_e))
+                       grass_total=excluded.grass_total, cheese=excluded.cheese""",
+                    (player, handle, pack(cur), rev, now, linked, linked_n, linked_played, grass_total, linked_e, int(g(cur, "t2", "cheeseLv"))))
         score_boards(con, player, handle, prev, cur, runs, earned, linked_n, grass_total, now, linked_e)
         return 200, {"ok": True, "rev": rev, "ranks": ranks(con, player), "linked": linked}
 
@@ -740,6 +751,10 @@ def handle_get(h, path, one):
         if not c:
             return h.redirect(SITE)  # expired or mistyped: the link still opens the game
         return h.raw(200, "text/html; charset=utf-8", share_page(path[11:], c).encode(), "public, max-age=300")
+    if path == "/api/net/cheese":
+        with H["db"]() as con:
+            rows = con.execute("SELECT handle, cheese FROM net_saves WHERE cheese > 0").fetchall()
+        return h.send(200, {"patrons": {r["handle"]: r["cheese"] for r in rows}})
     if path == "/api/net/recent":
         try:
             limit = max(1, min(100, int(one("limit") or 40)))

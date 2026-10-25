@@ -339,6 +339,7 @@ const T2_RES = [
   { id:"signal", name:"signal", icon:"📡", color:"#8be9fd", desc:"the new internet talking to itself. relays and nodes make it." },
   { id:"trust",  name:"trust",  icon:"🤝", color:"#50fa7b", desc:"everyone believing everyone, a little. the mesh makes it." },
   { id:"memory", name:"memory", icon:"🗄️", color:"#bd93f9", desc:"what the archive keeps. name servers and archive shards make it." },
+  { id:"cheese", name:"cheese", icon:"🧀", color:"#ffd75e", desc:"the last thing the network makes, aged in caves under the archive. it goes to CHEESEWORLD." },
 ];
 const T2_BUILDINGS = [
   { id:"relay",     name:"relay",         icon:"📡", cost:{grass:5},                           ratio:1.15, fx:{"t2.signal":0.5},                   desc:"passes the signal along. +0.5 📡/s." },
@@ -350,6 +351,8 @@ const T2_BUILDINGS = [
   // what reaches back into the first tier
   { id:"uplink",    name:"uplink",        icon:"🛰️", cost:{signal:1500, trust:150},            ratio:1.35, fx:{grass:0.1},                         desc:"+10% grass every time it's touched." },
   { id:"seedbank",  name:"seed bank",     icon:"🌱", cost:{trust:600, memory:60},              ratio:1.35, fx:{all:0.25},                          desc:"+25% to everything the network makes, so the gardener's runs go faster." },
+  // the very end: cheese, for CHEESEWORLD
+  { id:"cave",      name:"cheese cave",   icon:"🧀", cost:{trust:2e4, memory:2000},            ratio:1.25, fx:{"t2.cheese":0.05},                  desc:"cool, dark, under the archive. +0.05 🧀/s." },
 ];
 const T2_TECH = [
   { id:"gossip",    name:"gossip protocol",    cost:{signal:500},                 fx:{"t2mult.signal":0.5},  desc:"+50% 📡." },
@@ -358,7 +361,14 @@ const T2_TECH = [
   { id:"fastlane",  name:"fast lanes",         cost:{signal:8000, trust:1000},    fx:{all:1},                desc:"+100% to everything the network makes." },
   { id:"seedvault", name:"seed vault",         cost:{trust:5000, memory:500},     fx:{grass:0.5},            desc:"+50% grass every time it's touched." },
   { id:"consensus", name:"consensus",          cost:{memory:2000},                fx:{epochCost:-0.2},       desc:"epochs ask 20% less." },
+  { id:"affinage",  name:"affinage",           cost:{trust:2e4, memory:5000},     fx:{"t2mult.cheese":0.5},  desc:"+50% 🧀. it's all in the waiting." },
 ];
+/* CHEESEWORLD: cheese given away, a level at a time, each half again the last. No last level. It shows on your
+   profile in the cancel is coming as a cheese patron badge, and outside the daily you start its runs with a little
+   more $CULT: ten times the square root of your level (+10, +20 at 4, +30 at 9). */
+const CHEESE_BASE = 100, CHEESE_GROW = 1.5;
+const cheeseCost = lv => Math.round(CHEESE_BASE*Math.pow(CHEESE_GROW, lv));
+const cheeseCult = lv => Math.round(10*Math.sqrt(lv));
 
 /* rituals: spend devotion for something now. cd is the cooldown in seconds. */
 const RITUALS = [
@@ -487,6 +497,8 @@ const ACHIEVEMENTS = [
   { id:"gardener", name:"green thumb",         desc:"let the gardener touch grass for you.", test:s=>!!(s.perks||{}).gardener },
   { id:"uplinked", name:"uplinked",            desc:"build an uplink.",                   test:s=>!!(s.t2 && s.t2.b.uplink) },
   { id:"protocols",name:"rfc compliant",       desc:"research every protocol.",           test:s=>!!s.t2 && T2_TECH.every(t=>s.t2.tech[t.id]) },
+  { id:"cheese",   name:"say cheese",          desc:"give cheese to CHEESEWORLD.",        test:s=>!!(s.t2 && s.t2.cheeseLv) },
+  { id:"cheese10", name:"big cheese",          desc:"reach cheese patron level 10.",      test:s=>!!(s.t2 && s.t2.cheeseLv >= 10) },
 ];
 
 const NAMES = ["Miyu","Lain","Sakura","Remi","Yuki","Hana","Momo","Kiki","Nana","Rin","Aoi","Mika","Luna","Coco","Pika","Suki",

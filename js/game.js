@@ -116,6 +116,7 @@ function migrate(s){ // fill in anything a newer version added
   s.settings.notify = Object.assign({}, base.settings.notify, s.settings.notify);
   s.run.auto = Object.assign({}, base.run.auto, s.run.auto);
   s.auto.rites = Object.assign({}, base.auto.rites, s.auto.rites);
+  if(s.t2){ for(const r of T2_RES) s.t2.res[r.id] = s.t2.res[r.id] || 0; s.t2.cheeseLv = s.t2.cheeseLv || 0; } // newer second-tier things
   return deviceSettings(s);
 }
 
@@ -789,7 +790,7 @@ function buyPerk(id, card){
   S.grass -= p.cost; S.perks[id] = true; sfx.buy(); FX.buy(card, true); react("big");
   log("🌿 perk: <b>"+p.name+"</b>. "+p.desc);
   if(id==="gardener" && !S.t2){
-    S.t2 = { res:{ signal:0, trust:0, memory:0 }, b:{}, tech:{}, frozen, e0:S.nn.e||0 };
+    S.t2 = { res:{ signal:0, trust:0, memory:0, cheese:0 }, b:{}, tech:{}, frozen, e0:S.nn.e||0, cheeseLv:0 };
     log("🌐 the second tier is open, in the new internet. your grass bonus is locked in at <b>+"+pct(frozen)+"</b> for good: grass is for building now.");
     refresh(true); return;
   }
@@ -832,6 +833,22 @@ function buildT2(body){
     c.dataset.t2t = t.id; if(S.t2.tech[t.id]) c.classList.add("owned"); tg.appendChild(c);
   }
   body.appendChild(tg);
+  // CHEESEWORLD: give cheese away, a level at a time; it shows over in the cancel is coming
+  const cw = el("div", "cheese-box");
+  cw.innerHTML = '<div class="nn-h"><b>🧀 CHEESEWORLD</b><span id="cw-lv"></span></div>'+
+    '<p class="note">give cheese away, a level at a time, each half again the last. your profile in <a href="https://cancel.tylerirl.com/" target="_blank" rel="noopener">the cancel is coming</a> wears it as a cheese patron badge, on the boards and everywhere your name is, and outside the daily you start its runs with a little more $CULT. the daily stays the same for everyone.</p>'+
+    '<div class="nn-ctl"><button class="btn" id="cw-give"></button><span class="note" id="cw-next"></span></div>';
+  body.appendChild(cw);
+  cw.querySelector("#cw-give").onclick = c=>giveCheese(c.currentTarget);
+}
+function giveCheese(btn){
+  const lv = S.t2.cheeseLv||0, c = cheeseCost(lv);
+  if(S.t2.res.cheese < c - 1e-9) return sfx.no();
+  S.t2.res.cheese -= c; S.t2.cheeseLv = lv + 1;
+  sfx.shiny(); FX.buy(btn, true); react("love"); cue("stage");
+  log("🧀 you gave "+fmt(c)+" cheese to CHEESEWORLD: cheese patron, level <b>"+(lv+1)+"</b>. in the cancel is coming, that's +"+cheeseCult(lv+1)+" $CULT to start a run (not the daily).");
+  clearTimeout(syncSoon); syncSoon = setTimeout(()=>syncUp(), 1000); // so the cancel sees it soon
+  refresh();
 }
 function updateT2(body){
   if(!S.t2 || !$("t2-grass")) return;
@@ -845,6 +862,13 @@ function updateT2(body){
     c.classList.toggle("cant", !t2CanPay(S, pr));
     const n = S.t2.b[b.id]||0; $("t2n-"+b.id).textContent = n ? "×"+n : "";
   });
+  if($("cw-give")){
+    const lv = S.t2.cheeseLv||0, c = cheeseCost(lv), have = S.t2.res.cheese;
+    $("cw-lv").textContent = lv ? "cheese patron, level "+lv+" · +"+cheeseCult(lv)+" $CULT to start a cancel run" : "nothing given yet";
+    $("cw-give").innerHTML = "give "+fmt(c)+" 🧀"; $("cw-give").disabled = have < c - 1e-9;
+    const rate = R.t2.cheese||0;
+    $("cw-next").textContent = have >= c ? "level "+(lv+1)+": +"+cheeseCult(lv+1)+" $CULT" : rate > 0 ? "⏳ "+fmtTime(Math.ceil((c - have)/rate)) : S.t2.b.cave ? "" : "build a cheese cave to make some";
+  }
   body.querySelectorAll("[data-t2t]").forEach(c=>{
     const t = byId(T2_TECH, c.dataset.t2t);
     if(S.t2.tech[t.id]){ c.querySelector(".cc").innerHTML = '<span class="done">running</span>'; c.classList.remove("cant"); return; }
@@ -2775,7 +2799,7 @@ async function openProfile(handle){
       (mine ? '<button class="pshare" data-share-run="'+x.n+'" title="share this run" aria-label="share run '+x.n+'">📸</button>' : "")+'</div>'; };
   openModal('<div class="prof">'+
       '<canvas id="prof-cv" class="portrait" width="'+K.w+'" height="'+K.h+'"></canvas>'+
-      '<h2>'+whoTag(p.handle)+(acct() && acct().handle===p.handle ? ' <small class="you-tag">you</small>' : "")+'</h2>'+
+      '<h2>'+whoTag(p.handle)+(p.cheese ? ' <small class="cheese-tag" title="cheese patron: cheese given to CHEESEWORLD">🧀 '+p.cheese+'</small>' : "")+(acct() && acct().handle===p.handle ? ' <small class="you-tag">you</small>' : "")+'</h2>'+
       '<p class="note">'+(p.born ? "playing since "+new Date(p.born).toLocaleDateString()+" · " : "")+(agoShort(p.saved)==="now" ? "synced just now" : "last synced "+agoShort(p.saved)+" ago")+(p.online ? " · 🌐 online since "+new Date(p.online).toLocaleDateString() : "")+'</p>'+
       '<div class="pgrid">'+tile("network", fmt(p.miladys), "miladys now")+tile("runs", fmt(p.runs), "touched grass")+tile("played", fmtTime(p.played))+
         tile("grass", fmt(p.grass), "earned signed in")+tile("new internet", nn, p.online ? (p.epochs ? "epochs past the end" : "online") : "stages")+tile("achievements", p.ach+" / "+ACHIEVEMENTS.length)+'</div>'+
