@@ -632,7 +632,7 @@ input[type=range]{accent-color:var(--neon);width:150px;}
 .chart .xh line{stroke:rgba(255,255,255,.35);stroke-width:1;}
 .chart .xh circle{stroke:#000;stroke-width:2;}
 .chart .xh.hidden,.chart-tip.hidden{display:none;}
-.chart .bar{fill:var(--neon);opacity:.75;} .chart .bar.ch{fill:var(--gold);} .chart .bar:hover{opacity:1;}
+
 .chart-tip{position:absolute;top:-6px;background:rgba(0,0,0,.88);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:11px;pointer-events:none;white-space:nowrap;color:var(--txt);}
 .chart-tip span{color:var(--dim);}
 
@@ -708,3 +708,19 @@ body.ambient .screen,body.ambient #post-fab,body.ambient .toasts,body.ambient #t
 .who-row select{padding:6px 8px;} .who-row .who-id{width:96px;}
 .who-row .who-msg{flex-basis:100%;text-align:center;}
 .set-row.who-set{flex-wrap:wrap;} .set-row.who-set .who-row{justify-content:flex-end;} .set-row.who-set .who-msg{text-align:right;}
+/* stacked charts */
+.chart .lyr{stroke:#0b0b0f;stroke-width:1.5;stroke-linejoin:round;}
+.chart .grid.zero{stroke:rgba(255,255,255,.3);}
+.chart .net{fill:none;stroke:#f0efec;stroke-width:2;stroke-linejoin:round;}
+.chart .ph{opacity:.85;}
+.chart .run.now path{opacity:.75;} .chart .run.now path:last-of-type{stroke:#f0efec;stroke-width:1;stroke-dasharray:3 2;}
+.chart .run:hover path{filter:brightness(1.2);}
+.chart .legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin:0 0 6px 46px;font-size:11px;color:var(--dim);}
+.chart .legend i,.chart-tip i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
+.chart .legend i.ln{height:2px;vertical-align:3px;background:#f0efec;}
+.chart-tip table{border-collapse:collapse;margin-top:3px;}
+.chart-tip td{padding:1px 0;color:var(--txt);} .chart-tip td+td{padding-left:14px;text-align:right;font-variant-numeric:tabular-nums;}
+.chart-tip tr.sub td{color:var(--dim);padding-left:15px;font-size:10px;} .chart-tip tr.sub td+td{padding-left:14px;}
+.chart-tip tr.sum td{border-top:1px solid var(--line);padding-top:2px;}
+.chart.stack .chart-tip{white-space:nowrap;}
+.box-h .seg{display:inline-flex;gap:3px;} .box-h .seg .pick{min-height:0;padding:2px 7px;font-size:12px;letter-spacing:0;}

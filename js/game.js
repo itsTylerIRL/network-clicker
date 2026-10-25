@@ -229,7 +229,8 @@ function tick(s, dt, live){
   s.buffs = s.buffs.filter(b=>b.until > s.t);
   pour(s, R, dt, live);
   automate(s, R, dt, live);
-  sample(s);
+  sample(s, R);
+  splits(s);
   if(live) liveEvents(s, dt, R);
 }
 
@@ -307,18 +308,47 @@ function automate(s, R, dt, live){
 /* ---------- graphs: what you held, through the run ---------- */
 /* a point every 15s; when there are too many, every other one goes and the gap doubles, so a long run still fits */
 const GRAPH_MAX = 240;
-function sample(s){
+function sample(s, R){
   const g = s.run.g || (s.run.g = { every:15, next:0, t:[], v:{} });
   if(s.runT < g.next) return;
   g.next = s.runT + g.every;
   g.t.push(Math.round(s.runT));
-  for(const r of RES) (g.v[r.id] || (g.v[r.id] = [])).push(+s.res[r.id].toPrecision(3));
-  (g.v.miladys || (g.v.miladys = [])).push(s.miladys.length);
+  // a series that starts partway through a run (a save from before it was kept) is zeros up to here, so they all line up
+  const put = (k, v) => (g.v[k] || (g.v[k] = new Array(g.t.length-1).fill(0))).push(v);
+  for(const r of RES) put(r.id, +s.res[r.id].toPrecision(3));
+  put("miladys", s.miladys.length);
+  if(R){
+    for(const j of JOBS) put("j."+j.id, R.jobs[j.id]);
+    put("j.idle", R.jobs.idle); put("j.away", R.jobs.away);
+    const src = vibeSources(s, R, g);
+    for(const k in src) put("v."+k, +src[k].toPrecision(3));
+    put("ph", PHASES.indexOf(R.phase));
+  }
   if(g.t.length > GRAPH_MAX){
     const half = arr => arr.filter((_, i)=>i%2===0);
     g.t = half(g.t); for(const k in g.v) g.v[k] = half(g.v[k]);
     g.every *= 2; g.next = g.t[g.t.length-1] + g.every;
   }
+}
+
+/* where the vibes are coming from right now, after every bonus, and what eating takes */
+function vibeSources(s, R, g){
+  const f = R.f, J = R.jobs, poster = JOBS[0];
+  const posters = J.w.poster * poster.rate * (1 + (f["job.poster"]||0)) * R.happy;
+  const buildings = BUILDINGS.reduce((a, b)=>a + (s.b[b.id]||0)*(b.fx["rate.vibes"]||0), 0);
+  const other = Math.max(0, (f["rate.vibes"]||0) - buildings) + (f["idle.vibes"]||0)*J.idle;
+  const base = posters + buildings + other, mult = base > 0 ? R.prod.vibes/base : 0;
+  // you: the posts since the last point, at what a post is worth now
+  const dt = s.runT - (g.clkT||0), you = g.clk!=null && dt > 0 ? Math.max(0, s.stats.clicks - g.clk)/dt*R.click : 0;
+  g.clk = s.stats.clicks; g.clkT = s.runT;
+  return { posters:posters*mult, you, bots:R.bots, buildings:buildings*mult, other:other*mult, eat:-R.eat };
+}
+/* run splits: when the network first got to 10, 50, 100 and 250 at once */
+const SPLITS = [10, 50, 100, 250];
+function splits(s){
+  const sp = s.run.sp || (s.run.sp = {}), n = s.miladys.length;
+  if(n < 10) return;
+  for(const k of SPLITS) if(!sp[k] && n >= k) sp[k] = Math.round(s.runT);
 }
 
 /* sparkles, drama and chatter only happen while you're watching */
@@ -641,7 +671,7 @@ function touchGrass(into){
   $("grass-yes").onclick = ()=>{
     const done = Object.assign({}, S.chDone);
     if(met) done[S.challenge] = true;
-    const history = (S.history||[]).concat({ n:resets(S)+1, t:S.runT, cycles:S.cycle, peak:S.run.peak||S.miladys.length, grass:g,
+    const history = (S.history||[]).concat({ n:resets(S)+1, t:S.runT, cycles:S.cycle, peak:S.run.peak||S.miladys.length, grass:g, sp:S.run.sp,
       challenge:S.challenge, beaten:!!met, end:Date.now() }).slice(-50);
     const keep = { grass:S.grass+g, perks:S.perks, ach:S.ach, you:S.you, who:S.who, settings:S.settings, started:true, relics:S.relics, chDone:done,
       challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, history, born:S.born,
@@ -1196,8 +1226,12 @@ function buildStats(body){
     '</div>'+
     '<div class="box-h">this run, over time <span id="chart-pick">'+chartSeries().map(k=>'<button class="pick'+(k===chartKey ? " on" : "")+'" data-chart="'+k+'">'+(k==="miladys" ? "🌸 miladys" : resIcon(k))+'</button>').join("")+'</span></div>'+
     '<div class="chart" id="chart-run"></div>'+
+    '<div class="box-h">who\'s doing what <span class="seg">'+[["count","how many"],["share","share"]].map(([k,l])=>'<button class="pick'+(crowdMode===k ? " on" : "")+'" data-crowd="'+k+'">'+l+'</button>').join("")+'<button class="pick'+(tableOn.crowd ? " on" : "")+'" data-table="crowd" title="as a table">▦</button></span></div>'+
+    '<div class="chart stack" id="chart-crowd"></div>'+
+    '<div class="box-h">where the vibes come from, and go <span class="seg"><button class="pick'+(tableOn.vibes ? " on" : "")+'" data-table="vibes" title="as a table">▦</button></span></div>'+
+    '<div class="chart stack" id="chart-vibes"></div>'+
     runHistory()+
-    ((S.history||[]).length >= 2 ? '<div class="box-h">how long each run took <span>⚡ your fastest</span></div><div class="chart" id="chart-runs"></div>' : "")+
+    ((S.history||[]).length >= 1 ? '<div class="box-h">every run, in splits <span>⚡ your fastest · ▶ this one</span></div><div class="chart" id="chart-runs"></div>' : "")+
     '<div class="box-h">the network</div><div class="stat-grid">'+
     '<span>posts</span><b>'+fmt(S.stats.clicks)+'</b>'+
     '<span>sparkles caught</span><b>'+fmt(S.stats.sparkles)+'</b>'+
@@ -1210,7 +1244,9 @@ function buildStats(body){
   if(resets(S) >= 3 || Object.keys(S.relics).length) body.appendChild(relicShelf());
   if(S.ended){ const b = el("button", "btn small", "🌐 watch the ending again"); b.onclick = ()=>showEnding(); body.appendChild(b); }
   body.querySelectorAll("[data-chart]").forEach(b=>b.onclick = ()=>{ chartKey = b.dataset.chart; refresh(true); });
-  chartDrawn = ""; drawRunChart(); drawRunsChart();
+  body.querySelectorAll("[data-crowd]").forEach(b=>b.onclick = ()=>{ crowdMode = b.dataset.crowd; refresh(true); });
+  body.querySelectorAll("[data-table]").forEach(b=>b.onclick = ()=>{ tableOn[b.dataset.table] = !tableOn[b.dataset.table]; refresh(true); });
+  chartDrawn = ""; stackDrawn = {}; drawRunChart(); drawStacks(); drawRunsChart();
 }
 
 /* ---------- charts: plain svg, one series at a time, with a crosshair ---------- */
@@ -1225,12 +1261,13 @@ function drawRunChart(){
   const key = chartKey+"|"+(g ? g.t.length : 0)+"|"+box.clientWidth;
   if(key===chartDrawn) return; chartDrawn = key;
   if(!g || g.t.length < 2){ box.innerHTML = '<p class="note">a point every 15 seconds. give it a minute.</p>'; return; }
-  const ts = g.t, vs = g.v[chartKey], W = Math.max(280, box.clientWidth), H = 170, L = 46, Rp = 10, T = 10, B = 22;
+  const ts = g.t, vs = g.v[chartKey], W = Math.max(280, box.clientWidth), H = 180, L = 46, Rp = 10, T = 10, B = 32;
   const top = niceMax(Math.max(...vs)), x = t => L + (t - ts[0])/Math.max(1, ts[ts.length-1] - ts[0])*(W-L-Rp), y = v => T + (1 - v/top)*(H-T-B);
   const col = chartKey==="miladys" ? "#ff79c6" : RES_BY[chartKey].color;
   let s = '<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="'+(chartKey==="miladys" ? "miladys" : RES_BY[chartKey].name)+' over this run">';
   for(const f of [0, 0.5, 1]) s += svgEl("line", { x1:L, x2:W-Rp, y1:y(top*f), y2:y(top*f), class:"grid" }) + '<text class="ax" x="'+(L-6)+'" y="'+(y(top*f)+4)+'" text-anchor="end">'+fmt(top*f)+'</text>';
-  s += '<text class="ax" x="'+L+'" y="'+(H-6)+'">'+fmtTime(ts[0])+'</text><text class="ax" x="'+(W-Rp)+'" y="'+(H-6)+'" text-anchor="end">'+fmtTime(ts[ts.length-1])+'</text>';
+  s += '<text class="ax" x="'+L+'" y="'+(H-4)+'">'+fmtTime(ts[0])+'</text><text class="ax" x="'+(W-Rp)+'" y="'+(H-4)+'" text-anchor="end">'+fmtTime(ts[ts.length-1])+'</text>';
+  s += phaseBand(ts, g.v.ph, x, H - B + 6, 6);
   const pts = ts.map((t,i)=>x(t).toFixed(1)+","+y(vs[i]).toFixed(1));
   s += '<path d="M'+x(ts[0])+','+y(0)+' L'+pts.join(" L")+' L'+x(ts[ts.length-1])+','+y(0)+' Z" fill="'+col+'" opacity=".12"/>';
   s += '<polyline points="'+pts.join(" ")+'" fill="none" stroke="'+col+'" stroke-width="2" stroke-linejoin="round"/>';
@@ -1243,34 +1280,169 @@ function drawRunChart(){
     xh.classList.remove("hidden"); tip.classList.remove("hidden");
     xh.querySelector("line").setAttribute("x1", x(ts[i])); xh.querySelector("line").setAttribute("x2", x(ts[i]));
     xh.querySelector("circle").setAttribute("cx", x(ts[i])); xh.querySelector("circle").setAttribute("cy", y(vs[i]));
-    tip.innerHTML = '<b>'+fmt(vs[i])+'</b> '+(chartKey==="miladys" ? "miladys" : RES_BY[chartKey].name)+' <span>at '+fmtTime(ts[i])+'</span>';
+    tip.innerHTML = '<b>'+fmt(vs[i])+'</b> '+(chartKey==="miladys" ? "miladys" : RES_BY[chartKey].name)+' <span>at '+fmtTime(ts[i])+(g.v.ph && PHASES[g.v.ph[i]] ? " · "+PHASES[g.v.ph[i]].icon+" "+PHASES[g.v.ph[i]].name : "")+'</span>';
     tip.style.left = Math.min(r.width-140, Math.max(0, x(ts[i])*r.width/W - 60))+"px";
   };
   const hit = box.querySelector(".hit");
   hit.addEventListener("pointermove", at); hit.addEventListener("pointerdown", at);
   hit.addEventListener("pointerleave", ()=>{ xh.classList.add("hidden"); tip.classList.add("hidden"); });
 }
-/* bars: every finished run's length, oldest on the left, so getting faster shows */
+/* ---------- stacked charts: who's doing what, and where the vibes come from ---------- */
+/* chart colors are their own set, stepped for the dark page and checked for colorblind separation in stacking order
+   (the game's neon is too light and too alike for areas that touch). A job keeps its color whatever else is showing. */
+const JOB_STACK = [["poster","#d55181"],["memer","#008300"],["keeper","#9085e9"],["trader","#c98500"],["artist","#199e70"],["streamer","#d95926"],["dev","#3987e5"],["acolyte","#e66767"]];
+const REST_COL = "#5c5c58", EAT_COL = "#e66767";
+const SPLIT_COL = ["#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95"]; // one blue, light to dark: to 10, 50, 100, 250, the rest
+let crowdMode = "count", tableOn = {}, stackDrawn = {};
+function drawStacks(){
+  const g = S.run.g;
+  const ready = g && g.v["j.poster"] && g.t.length >= 2;
+  for(const id of ["crowd", "vibes"]){
+    const box = $("chart-"+id); if(!box) continue;
+    const key = (ready ? g.t.length : 0)+"|"+box.clientWidth+"|"+crowdMode+"|"+!!tableOn[id];
+    if(stackDrawn[id]===key) continue; stackDrawn[id] = key;
+    if(!ready){ box.innerHTML = '<p class="note">a point every 15 seconds. give it a minute.</p>'; continue; }
+    const z = g.v["j.poster"].map(()=>0), v = k => g.v[k] || z;
+    if(id==="crowd"){
+      const named = JOB_STACK.map(([j, col])=>({ name:byId(JOBS, j).name+"s", col, v:v("j."+j) })).filter(l=>l.v.some(x=>x>0));
+      const restIds = JOBS.filter(j=>!JOB_STACK.some(([k])=>k===j.id)).map(j=>j.id).concat("idle", "away");
+      const rest = { name:"everyone else", col:REST_COL, v:z.map((_, i)=>restIds.reduce((a, k)=>a + v("j."+k)[i], 0)),
+        parts:restIds.map(k=>({ name:k==="idle" ? "idle" : k==="away" ? "out raiding" : byId(JOBS, k).name+"s", v:v("j."+k) })) };
+      stackChart(box, { label:"who's doing what over this run", layers:named.concat(rest.v.some(x=>x>0) ? [rest] : []), share:crowdMode==="share", fmtV:fmt, table:tableOn.crowd });
+    } else {
+      const layers = [["posters", "#d55181", "posters"], ["you posting", "#3987e5", "you"], ["posting bots", "#199e70", "bots"], ["buildings", "#c98500", "buildings"], ["everything else", REST_COL, "other"]]
+        .map(([name, col, k])=>({ name, col, v:v("v."+k) })).filter(l=>l.v.some(x=>x>0));
+      stackChart(box, { label:"vibes made and eaten over this run", layers, under:[{ name:"eating", col:EAT_COL, v:v("v.eat") }], net:true, fmtV:fmtRate, table:tableOn.vibes });
+    }
+  }
+}
+/* layers stack up from zero, `under` stacks down from it, `net` draws what's left as a line; a strip of market phases runs underneath */
+function stackChart(box, o){
+  const g = S.run.g, ts = g.t, n = ts.length, ph = g.v.ph;
+  const sum = (ls, i) => ls.reduce((a, l)=>a + Math.abs(l.v[i]||0), 0);
+  const scale = i => o.share ? (sum(o.layers, i) || 1)/100 : 1;
+  if(o.table){ box.innerHTML = stackTable(o, ts, scale); return; }
+  const W = Math.max(280, box.clientWidth), H = 190, L = 46, Rp = 10, T = 10, B = 32, band = 6;
+  const hiRaw = Math.max(...ts.map((_, i)=>sum(o.layers, i)/scale(i))), loRaw = o.under ? Math.max(...ts.map((_, i)=>sum(o.under, i))) : 0;
+  const hi = o.share ? 100 : niceMax(hiRaw), lo = loRaw ? Math.max(niceMax(loRaw), hi/5) : 0; // the underside gets a fifth at least, so a little eating still reads
+  const x = t => L + (t - ts[0])/Math.max(1, ts[n-1] - ts[0])*(W-L-Rp), y = val => T + (hi - val)/(hi + lo)*(H-T-B);
+  const fv = val => o.share ? Math.round(val)+"%" : fmt(val)+(o.net ? "/s" : "");
+  let s = '<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="'+o.label+', stacked: '+o.layers.map(l=>l.name).join(", ")+'">';
+  for(const val of lo ? [hi, 0, -lo] : [hi, hi/2, 0]) s += svgEl("line", { x1:L, x2:W-Rp, y1:y(val), y2:y(val), class:val===0 ? "grid zero" : "grid" }) + '<text class="ax" x="'+(L-6)+'" y="'+(y(val)+4)+'" text-anchor="end">'+(val < 0 ? "-" : "")+fv(Math.abs(val))+'</text>';
+  // each layer is the band between the running total below it and the one with it added
+  const area = (ls, sign) => {
+    let acc = ts.map(()=>0), out = "";
+    for(const l of ls){
+      const top = acc.map((a, i)=>a + Math.abs(l.v[i]||0)/scale(i));
+      const up = ts.map((t, i)=>x(t).toFixed(1)+","+y(sign*top[i]).toFixed(1)), down = ts.map((t, i)=>x(t).toFixed(1)+","+y(sign*acc[i]).toFixed(1)).reverse();
+      out += '<path class="lyr" d="M'+up.join(" L")+" L"+down.join(" L")+' Z" fill="'+l.col+'"/>';
+      acc = top;
+    }
+    return out;
+  };
+  s += area(o.layers, 1) + (o.under ? area(o.under, -1) : "");
+  if(o.net){
+    const pts = ts.map((t, i)=>x(t).toFixed(1)+","+y(o.layers.reduce((a, l)=>a + (l.v[i]||0), 0) + o.under.reduce((a, l)=>a + (l.v[i]||0), 0)).toFixed(1));
+    s += '<polyline class="net" points="'+pts.join(" ")+'"/>';
+  }
+  s += phaseBand(ts, ph, x, H - B + 6, band);
+  s += '<text class="ax" x="'+L+'" y="'+(H-4)+'">'+fmtTime(ts[0])+'</text><text class="ax" x="'+(W-Rp)+'" y="'+(H-4)+'" text-anchor="end">'+fmtTime(ts[n-1])+'</text>';
+  s += '<g class="xh hidden"><line y1="'+T+'" y2="'+(H-B)+'"/></g><rect class="hit" x="'+L+'" y="0" width="'+(W-L-Rp)+'" height="'+H+'" fill="transparent"/></svg>';
+  const legend = o.layers.concat(o.under||[]).map(l=>'<span><i style="background:'+l.col+'"></i>'+l.name+'</span>').join("") + (o.net ? '<span><i class="ln"></i>what\'s left</span>' : "");
+  box.innerHTML = '<div class="legend">'+legend+'</div>' + s + '<div class="chart-tip hidden"></div>';
+  hover(box, ts, x, W, i=>{
+    const row = (l, val) => '<tr><td><i style="background:'+l.col+'"></i>'+l.name+'</td><td>'+(o.share ? Math.round((val||0)/scale(i))+"%" : o.fmtV(val||0))+'</td></tr>';
+    let h = '<b>'+fmtTime(ts[i])+'</b>'+(ph && PHASES[ph[i]] ? ' <span>'+PHASES[ph[i]].icon+" "+PHASES[ph[i]].name+'</span>' : "")+'<table>';
+    for(const l of o.layers.slice().reverse()){
+      h += row(l, l.v[i]);
+      if(l.parts) for(const p of l.parts) if(p.v[i]) h += '<tr class="sub"><td>'+p.name+'</td><td>'+(o.share ? Math.round(p.v[i]/scale(i))+"%" : o.fmtV(p.v[i]))+'</td></tr>';
+    }
+    if(o.under) for(const l of o.under) h += row(l, l.v[i]);
+    if(o.net) h += '<tr class="sum"><td>what\'s left</td><td>'+o.fmtV(o.layers.concat(o.under).reduce((a, l)=>a + (l.v[i]||0), 0))+'</td></tr>';
+    else if(!o.share) h += '<tr class="sum"><td>in all</td><td>'+o.fmtV(sum(o.layers, i))+'</td></tr>';
+    return h+'</table>';
+  });
+}
+/* the same numbers, for reading rather than looking: a dozen points spread through the run */
+function stackTable(o, ts, scale){
+  const n = ts.length, idx = [...new Set(Array.from({ length:Math.min(12, n) }, (_, k)=>Math.round(k*(n-1)/Math.max(1, Math.min(12, n)-1))))];
+  const ls = o.layers.concat(o.under||[]);
+  return '<div class="runs-wrap"><table class="runs"><tr><th>at</th>'+ls.map(l=>'<th>'+l.name+'</th>').join("")+'</tr>'+
+    idx.map(i=>'<tr><td>'+fmtTime(ts[i])+'</td>'+ls.map(l=>'<td>'+(o.share ? Math.round((l.v[i]||0)/scale(i))+"%" : o.fmtV(l.v[i]||0))+'</td>').join("")+'</tr>').join("")+'</table></div>';
+}
+/* which market it was, along the bottom of a run chart */
+function phaseBand(ts, ph, x, top, h){
+  if(!ph) return "";
+  let s = "", from = 0;
+  for(let i=1; i<=ts.length; i++){
+    if(i < ts.length && ph[i]===ph[from]) continue;
+    const p = PHASES[ph[from]], x0 = x(ts[from]), x1 = i < ts.length ? x(ts[i]) : x(ts[ts.length-1]);
+    if(p && x1 > x0) s += '<rect class="ph" x="'+x0.toFixed(1)+'" y="'+top+'" width="'+Math.max(1, x1 - x0 - 1).toFixed(1)+'" height="'+h+'" rx="2" fill="'+p.color+'"><title>'+p.icon+" "+p.name+'</title></rect>';
+    from = i;
+  }
+  return s;
+}
+/* crosshair and tooltip for a chart over time */
+function hover(box, ts, x, W, tipHtml){
+  const xh = box.querySelector(".xh"), tip = box.querySelector(".chart-tip"), svg = box.querySelector("svg");
+  const at = ev => {
+    const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left)*W/r.width, br = box.getBoundingClientRect();
+    let i = 0; for(let k=1; k<ts.length; k++) if(Math.abs(x(ts[k]) - px) < Math.abs(x(ts[i]) - px)) i = k;
+    xh.classList.remove("hidden"); tip.classList.remove("hidden");
+    xh.querySelector("line").setAttribute("x1", x(ts[i])); xh.querySelector("line").setAttribute("x2", x(ts[i]));
+    tip.innerHTML = tipHtml(i);
+    const cx = x(ts[i])*r.width/W + (r.left - br.left), tw = tip.offsetWidth;
+    tip.style.left = (cx + 14 + tw > br.width ? Math.max(0, cx - 14 - tw) : cx + 14)+"px";
+    tip.style.top = (r.top - br.top + 8)+"px";
+  };
+  const hit = box.querySelector(".hit");
+  hit.addEventListener("pointermove", at); hit.addEventListener("pointerdown", at);
+  hit.addEventListener("pointerleave", ()=>{ xh.classList.add("hidden"); tip.classList.add("hidden"); });
+}
+/* bars: every run's length, oldest on the left, split where the network got to 10, 50, 100 and 250, so you can see which
+   stretch got faster. The run you're on is the last bar, outlined. */
 function drawRunsChart(){
   const box = $("chart-runs"); if(!box) return;
-  const h = (S.history||[]).slice(-30), W = Math.max(280, box.clientWidth), H = 140, L = 46, T = 14, B = 20, Rp = 10;
-  const most = Math.max(...h.map(r=>r.t)), top = most > 3600 ? Math.ceil(most/3600)*3600 : Math.ceil(most/600)*600; // whole hours, or ten minutes
+  const h = (S.history||[]).slice(-29).concat({ n:runNo(), t:S.runT, sp:S.run.sp, challenge:S.challenge, now:true });
+  const W = Math.max(280, box.clientWidth), H = 150, L = 46, T = 16, B = 20, Rp = 10;
+  const most = Math.max(60, ...h.map(r=>r.t)), top = most > 3600 ? Math.ceil(most/3600)*3600 : Math.ceil(most/600)*600; // whole hours, or ten minutes
   const bw = Math.min(44, (W-L-Rp)/h.length), y = v => T + (1 - v/top)*(H-T-B);
-  const plain = h.filter(r=>!r.challenge), best = plain.length ? Math.min(...plain.map(r=>r.t)) : -1;
-  let s = '<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="how long each run took">';
+  const plain = h.filter(r=>!r.challenge && !r.now), best = plain.length ? Math.min(...plain.map(r=>r.t)) : -1;
+  const legs = r => { // [from, to, color index] for each stretch of a run
+    if(!r.sp || !Object.keys(r.sp).length) return [[0, r.t, -1]];
+    const out = []; let from = 0;
+    SPLITS.forEach((k, j)=>{ if(r.sp[k] != null){ out.push([from, r.sp[k], j]); from = r.sp[k]; } });
+    out.push([from, r.t, out.length < SPLITS.length ? out.length : SPLITS.length]);
+    return out;
+  };
+  const LEG_NAME = ["to 10 miladys", "10 to 50", "50 to 100", "100 to 250", "250 and on"];
+  let s = '<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="how long each run took, split by how big the network had got">';
   for(const f of [0, 0.5, 1]) s += svgEl("line", { x1:L, x2:W-Rp, y1:y(top*f), y2:y(top*f), class:"grid" }) + '<text class="ax" x="'+(L-6)+'" y="'+(y(top*f)+4)+'" text-anchor="end">'+fmtTime(top*f).replace(/ 0[ms]$/, "")+'</text>';
   h.forEach((r, i)=>{
-    const bx = L + i*bw + 1, w = Math.max(2, bw-2), by = y(r.t), bh = Math.max(1, y(0) - by), rr = Math.min(4, w/2, bh);
-    s += '<path class="bar'+(r.challenge ? " ch" : "")+'" data-i="'+i+'" d="M'+bx+','+y(0)+' V'+(by+rr)+' Q'+bx+','+by+' '+(bx+rr)+','+by+' H'+(bx+w-rr)+' Q'+(bx+w)+','+by+' '+(bx+w)+','+(by+rr)+' V'+y(0)+' Z"/>';
-    if(r.t===best && !r.challenge) s += '<text class="ax" x="'+(bx+w/2)+'" y="'+(by-3)+'" text-anchor="middle">⚡</text>';
-    if(h.length <= 15 || i%Math.ceil(h.length/15)===0) s += '<text class="ax" x="'+(bx+w/2)+'" y="'+(H-6)+'" text-anchor="middle">'+r.n+'</text>';
+    const bx = L + i*bw + 1, w = Math.max(2, bw-2), ls = legs(r);
+    s += '<g class="run'+(r.now ? " now" : "")+'" data-i="'+i+'">';
+    ls.forEach(([a, b, c], j)=>{
+      const y0 = y(a), y1 = y(b), last = j===ls.length-1, rr = last ? Math.min(4, w/2, Math.max(0, y0 - y1)) : 0, gap = j ? 1 : 0; // a hairline of page between stretches
+      const col = c < 0 ? REST_COL : SPLIT_COL[c];
+      s += '<path d="M'+bx+','+(y0-gap)+' V'+(y1+rr)+' Q'+bx+','+y1+' '+(bx+rr)+','+y1+' H'+(bx+w-rr)+' Q'+(bx+w)+','+y1+' '+(bx+w)+','+(y1+rr)+' V'+(y0-gap)+' Z" fill="'+col+'"/>';
+    });
+    s += '<rect class="hit" x="'+(bx-1)+'" y="'+T+'" width="'+(w+2)+'" height="'+(H-T-B)+'" fill="transparent"/></g>';
+    const mark = r.now ? "▶" : r.t===best && !r.challenge ? "⚡" : r.challenge ? "⚖️" : "";
+    if(mark) s += '<text class="ax" x="'+(bx+w/2)+'" y="'+(y(r.t)-4)+'" text-anchor="middle">'+mark+'</text>';
+    if(h.length <= 15 || i%Math.ceil(h.length/15)===0 || r.now) s += '<text class="ax" x="'+(bx+w/2)+'" y="'+(H-6)+'" text-anchor="middle">'+r.n+'</text>';
   });
-  box.innerHTML = s + '</svg><div class="chart-tip hidden"></div>';
+  const legend = LEG_NAME.map((l, j)=>'<span><i style="background:'+SPLIT_COL[j]+'"></i>'+l+'</span>').join("") + (h.some(r=>!r.sp) ? '<span><i style="background:'+REST_COL+'"></i>not split (older runs)</span>' : "");
+  box.innerHTML = '<div class="legend">'+legend+'</div>' + s + '</svg><div class="chart-tip hidden"></div>';
   const tip = box.querySelector(".chart-tip");
-  box.querySelectorAll(".bar").forEach(b=>{
+  box.querySelectorAll(".run").forEach(b=>{
     const show = ()=>{ const r = h[+b.dataset.i], br = b.getBoundingClientRect(), cr = box.getBoundingClientRect();
-      tip.innerHTML = '<b>run '+r.n+'</b> '+fmtTime(r.t)+' <span>· '+r.cycles+' cycles · peak '+fmt(r.peak)+' · +'+fmt(r.grass)+' 🌿'+(r.challenge ? " · ⚖️ "+byId(CHALLENGES, r.challenge).name : "")+'</span>';
-      tip.classList.remove("hidden"); tip.style.left = Math.min(cr.width-200, Math.max(0, br.left - cr.left - 60))+"px"; };
+      const ls = legs(r);
+      tip.innerHTML = '<b>'+(r.now ? "this run, so far" : "run "+r.n)+'</b> '+fmtTime(r.t)+
+        (r.now ? "" : ' <span>· '+r.cycles+' cycles · peak '+fmt(r.peak)+' · +'+fmt(r.grass)+' 🌿'+(r.challenge ? " · ⚖️ "+byId(CHALLENGES, r.challenge).name : "")+'</span>')+
+        (ls[0][2] >= 0 ? '<table>'+ls.map(([a, b2, c])=>'<tr><td><i style="background:'+SPLIT_COL[c]+'"></i>'+LEG_NAME[c]+'</td><td>'+fmtTime(b2 - a)+'</td></tr>').join("")+'</table>' : "");
+      tip.classList.remove("hidden");
+      const tw = tip.offsetWidth, left = br.left - cr.left + br.width + 8;
+      tip.style.left = (left + tw > cr.width ? Math.max(0, br.left - cr.left - 8 - tw) : left)+"px"; tip.style.top = "24px"; };
     b.addEventListener("pointerenter", show); b.addEventListener("pointerdown", show);
     b.addEventListener("pointerleave", ()=>tip.classList.add("hidden"));
   });
@@ -1428,7 +1600,7 @@ function update(){
     $("nn-req").innerHTML = (q.miladys ? (S.miladys.length >= q.miladys ? "✅" : "⏳")+" needs "+q.miladys+" miladys in the network at once ("+S.miladys.length+" now). " : "")+
       (q.cathedral ? ((S.wonder||0) >= WONDER.length ? "✅" : "⏳")+" needs the cathedral finished this run." : "");
   }
-  if($("chart-run")) drawRunChart();
+  if($("chart-run")){ drawRunChart(); drawStacks(); }
   if($("speed-left")) $("speed-left").textContent = S.runT <= 5400 ? fmtTime(5400 - S.runT)+" left." : "out of time.";
   if($("grass-have")){
     const g = grassGain(S, R.f);
