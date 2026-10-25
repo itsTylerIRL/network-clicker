@@ -75,5 +75,9 @@ perks_src = perks_src[:perks_src.index("];")]
 perks = {m.group(1): int(m.group(2)) for m in re.finditer(r'\{ id:"(\w+)",[^\n]*?cost:(\d+)', perks_src)}
 ch_src = data_js[data_js.index("const CHALLENGES"):]
 challenges = re.findall(r'\{ id:"(\w+)"', ch_src[:ch_src.index("];")])
-(ROOT / "server/net_spec.json").write_text(json.dumps({"perks": perks, "challenges": challenges}, indent=1) + "\n", "utf8")
+challenge_names = dict(re.findall(r'\{ id:"(\w+)",\s*name:"([^"]+)"', ch_src[:ch_src.index("];")]))
+ach_src = data_js[data_js.index("const ACHIEVEMENTS"):]
+achievements = len(re.findall(r'\{ id:"\w+"', ach_src[:ach_src.index("];")]))
+(ROOT / "server/net_spec.json").write_text(json.dumps({"perks": perks, "challenges": challenges, "challenge_names": challenge_names,
+                                                       "achievements": achievements}, indent=1) + "\n", "utf8")
 print("dist.html: %.1f MB, %d inlined assets, version %s" % (len(html.encode()) / 1e6, len(files), stamp))

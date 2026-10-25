@@ -56,9 +56,12 @@ function fresh(keep){
     timers:{ arrive:0, leave:0, sparkle:60, drama:180, auto:0, feed:40, bot:0 },
     run:{ cult:0, start:Date.now(), auto:{ b:0, t:0, u:0, m:0 } },
     nn:{ i:0, got:{}, on:true, share:0.5 }, ended:0, endSeen:false,
-    auto:{ build:true, tech:true, up:true, meme:true, keep:0.25, skip:{} },
+    auto:{ build:true, tech:true, up:true, meme:true, rite:true, raid:true, wonder:true, grass:true, keep:0.25, skip:{},
+      rites:{ prayer:true, hyperpost:true, airdrop:true, vigil:true, meetup:false, bull:false } }, // which rituals the choirmaster holds
     grass:0, perks:{}, ach:{}, relics:{}, chDone:{}, challenge:null,
     cd:{}, raids:[], wonder:0, autoJob:"poster", seenNew:{}, history:[], born:Date.now(),
+    garden:{ at:"best", min:10, runs:[], away:0 }, // the gardener: when it touches grass, its last few runs (for time away), and grass it brought in while you were
+    t2:null, // the second tier, once the gardener has it running: { res, b, tech, frozen (the grass bonus, locked in), e0 (the epoch it opened on) }
     who:{ kind:"milady", token:null, eye:"" }, // who you are: a milady or a remilio, rolled or a token by its number (S.you is the layers)
     stats:{ clicks:0, sparkles:0, resets:0, played:0, made:{}, rituals:0, raids:0, cancels:0, cycles:0 },
     you:null, settings:{ mute:false, bg:true, calm:!!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches),
@@ -111,6 +114,7 @@ function migrate(s){ // fill in anything a newer version added
   for(const k of ["res","seen","b","timers","stats","settings","run","nn","auto"]) s[k] = Object.assign({}, base[k], s[k]);
   s.settings.notify = Object.assign({}, base.settings.notify, s.settings.notify);
   s.run.auto = Object.assign({}, base.run.auto, s.run.auto);
+  s.auto.rites = Object.assign({}, base.auto.rites, s.auto.rites);
   return deviceSettings(s);
 }
 
@@ -146,6 +150,7 @@ function sumFx(s){
   for(const c of CHALLENGES) if(s.chDone[c.id]) add(c.reward, 1);
   for(let i=0; i<((s.nn && s.nn.i)||0); i++) add(NEWNET[i].fx, 1);
   add(EPOCH_FX, (s.nn && s.nn.e)||0);
+  if(s.t2){ for(const b of T2_BUILDINGS) add(b.fx, s.t2.b[b.id]||0); for(const t of T2_TECH) if(s.t2.tech[t.id]) add(t.fx, 1); }
   f.all = (f.all||0) + Object.keys(s.ach).length * ACH_EACH; // every achievement is worth a little
   return f;
 }
@@ -159,7 +164,7 @@ const crowding = n => n > 10 ? 0.35*Math.log(1 + (n-10)/25) : 0;
 function rates(s){
   const f = sumFx(s), jobs = jobCounts(s, f), home = s.miladys.length - jobs.away, ph = phase(s);
   const happy = Math.max(0.25, 1 + (f.happy||0) + jobs.mod*0.03 - crowding(home) + buff(s, "happy"));
-  const grassMult = 1 + s.grass*(GRASS_EACH + (f.grassEach||0));
+  const grassMult = 1 + (s.t2 ? s.t2.frozen : s.grass*(GRASS_EACH + (f.grassEach||0))); // in the second tier it's locked in
   const prod = {}, cap = {}, net = {};
   for(const r of RES){
     let base = (f["rate."+r.id] || 0) + (f["idle."+r.id] || 0) * jobs.idle;
@@ -178,7 +183,9 @@ function rates(s){
   // your posting bots are part of the vibes coming in (they post even on a logged-off run: it's you who can't)
   const autoclick = f.autoclick||0, bots = autoclick * (rule(s, "logoff") ? (1 + (f.click||0)) * grassMult : click);
   net.vibes += bots;
-  return { f, jobs, happy, prod, cap, net, eat, housing, click, autoclick, bots, phase:ph, grassMult };
+  const t2 = {}; // what the second tier makes a second: each epoch is +10% to it too
+  if(s.t2) for(const r of T2_RES) t2[r.id] = (f["t2."+r.id]||0) * (1 + (f["t2mult."+r.id]||0)) * (1 + EPOCH_FX.all*((s.nn && s.nn.e)||0));
+  return { f, jobs, happy, prod, cap, net, eat, housing, click, autoclick, bots, phase:ph, grassMult, t2 };
 }
 
 function gain(s, id, amt, cap){
@@ -228,11 +235,13 @@ function tick(s, dt, live){
 
   for(let i=s.raids.length-1; i>=0; i--) if(s.raids[i].until <= s.t) raidHome(s, i, live);
   s.buffs = s.buffs.filter(b=>b.until > s.t);
+  if(s.t2) for(const r of T2_RES) s.t2.res[r.id] += R.t2[r.id]*dt;
   pour(s, R, dt, live);
   automate(s, R, dt, live);
   sample(s, R);
   splits(s);
   if(live) liveEvents(s, dt, R);
+  if(s===S) gardener(s, R, live); // last: it can start a new run
 }
 
 /* ---------- the new internet: poured into, a stage at a time ---------- */
@@ -243,25 +252,31 @@ function nnReqMet(s, st){
 }
 /* how fast a resource is going in: a share of what you make, and all of it while storage is full (it'd be lost) */
 function pourRate(s, R, k){
+  if(inT2(s)) return Math.max(0, R.t2[k]||0) * s.nn.share; // the second tier has no storage to overflow
   const full = s.res[k] >= R.cap[k] - 1e-6;
   return Math.max(0, R.net[k]) * (full ? 1 : s.nn.share);
 }
-/* what's being poured into: a stage, or past the ending, the next epoch */
-const nnStage = s => s.ended ? epochStage(s.nn.e||0) : NEWNET[s.nn.i];
+/* what's being poured into: a stage, or past the ending, the next epoch (from the second tier, once it's running) */
+const inT2 = s => !!(s.t2 && s.ended);
+const epochMult = s => Math.max(0.2, 1 + (s.t2 ? T2_TECH.reduce((a, t)=>a + (s.t2.tech[t.id] && t.fx.epochCost || 0), 0) : 0));
+const nnStage = s => s.ended ? epochStage(s.nn.e||0, inT2(s) ? { t2:true, from:s.t2.e0, mult:epochMult(s) } : null) : NEWNET[s.nn.i];
+const nnBank = s => inT2(s) ? s.t2.res : s.res;
 function pour(s, R, dt, live){
   if(!nnOpen(s)) return;
   const st = nnStage(s); if(!st) return;
+  const bank = nnBank(s);
   if(s.nn.on) for(const k in st.need){
     const left = st.need[k] - (s.nn.got[k]||0); if(left <= 0) continue;
-    const take = Math.min(left, s.res[k], pourRate(s, R, k)*dt);
-    if(take > 0){ s.res[k] -= take; s.nn.got[k] = (s.nn.got[k]||0) + take; }
+    const take = Math.min(left, bank[k], pourRate(s, R, k)*dt);
+    if(take > 0){ bank[k] -= take; s.nn.got[k] = (s.nn.got[k]||0) + take; }
   }
   if(Object.keys(st.need).every(k=>(s.nn.got[k]||0) >= st.need[k]-1e-6) && nnReqMet(s, st)) finishStage(s, live);
 }
 function pourStored(){ // everything you're holding that the stage still needs, in one go
   const st = nnStage(S); if(!st) return;
   let any = 0;
-  for(const k in st.need){ const take = Math.min(st.need[k] - (S.nn.got[k]||0), S.res[k]); if(take > 0){ S.res[k] -= take; S.nn.got[k] = (S.nn.got[k]||0) + take; any++; } }
+  const bank = nnBank(S);
+  for(const k in st.need){ const take = Math.min(st.need[k] - (S.nn.got[k]||0), bank[k]); if(take > 0){ bank[k] -= take; S.nn.got[k] = (S.nn.got[k]||0) + take; any++; } }
   if(!any) return sfx.no();
   sfx.buy(); FX.buy($("nn-pour-now"));
   pour(S, R, 0, true); refresh();
@@ -285,14 +300,14 @@ function finishStage(s, live){
 /* ---------- automation: the robots the late runs buy ---------- */
 function automate(s, R, dt, live){
   const p = s.perks, a = s.auto;
-  if(!p.automeme && !p.autotech && !p.autobuild && !p.autoup) return;
+  if(!p.automeme && !p.autotech && !p.autobuild && !p.autoup && !p.autorite && !p.autoraid && !p.autowonder) return;
   s.timers.bot = (s.timers.bot||0) + dt;
   if(s.timers.bot < 1) return;
   const n = Math.min(20, Math.floor(s.timers.bot)); s.timers.bot -= n; // one go a second (a long step offline gets a few)
   const spare = c => Object.keys(c).every(k=>s.res[k] - c[k] >= a.keep*R.cap[k] - 1e-9); // leaves the reserve alone
   const room = c => Math.max(...Object.keys(c).map(k=>c[k]/R.cap[k])); // how much of your storage it takes
   const cheapest = list => list.sort((x, y)=>room(x.c) - room(y.c))[0];
-  const ct = s.run.auto, did = { m:0, t:[], u:[], b:{} }; // what this go bought, for ambient mode's cards
+  const ct = s.run.auto, did = { m:0, t:[], u:[], b:{}, x:[] }; // what this go bought, for ambient mode's cards
   for(let i=0; i<n; i++){
     if(p.automeme && a.meme && s.res.vibes >= R.cap.vibes*0.9){
       const m = Math.min(Math.floor((s.res.vibes - R.cap.vibes*0.6)/MEME_COST), Math.floor(R.cap.memes - s.res.memes));
@@ -307,8 +322,24 @@ function automate(s, R, dt, live){
       if(u){ pay(s, u.c); s.up[u.x.id] = true; ct.u++; did.u.push(u.x.name); if(live) log("🤖 bought <b>"+u.x.name+"</b>: "+u.x.desc); }
     }
     if(p.autobuild && a.build){
-      const b = cheapest(BUILDINGS.filter(b=>shownIn(s, b) && !a.skip[b.id]).map(b=>({ x:b, c:priceOf(b, s) })).filter(o=>canPay(s, o.c) && spare(o.c)));
+      const b = cheapest(BUILDINGS.filter(b=>shownIn(s, b) && !a.skip[b.id]).map(b=>({ x:b, c:priceOf(b, s, R.cap) })).filter(o=>canPay(s, o.c) && spare(o.c)));
       if(b){ pay(s, b.c); s.b[b.x.id]++; ct.b++; did.b[b.x.name] = (did.b[b.x.name]||0) + 1; if(live && s.b[b.x.id]===1) log("🤖 built your first <b>"+b.x.name+"</b>."); }
+    }
+    if(p.autowonder && a.wonder && (s.wonder||0) < WONDER.length && s.tech.geometry){
+      const c = wonderPrice(s.wonder||0, R.f);
+      // the reserve is kept where it can be: a stage bigger than what's spare above it is built as soon as it's affordable
+      const fits = Object.keys(c).every(k=>c[k] <= (1 - a.keep)*R.cap[k]);
+      if(canPay(s, c) && (spare(c) || !fits)){ const w = WONDER[s.wonder||0]; doStage(s, R); did.x.push(["⛪", "built", w.name]); if(live) stageLog(s, w, true); }
+    }
+    if(p.autorite && a.rite) for(const r of RITUALS) if(a.rites[r.id] && ritualOk(s, R, r)){
+      const msg = doRitual(s, R, r.id); did.x.push([r.icon, "held", r.name]);
+      if(live){ ritualFx(r.id); log("🤖 "+r.icon+" held <b>"+r.name+"</b>. "+msg); }
+    }
+    if(p.autoraid && a.raid && s.tech.raiding){
+      // idle miladys go first; of the workers, never more than a quarter are out raiding at once
+      const idle = s.miladys.filter(m=>!m.away && !m.job).length, workers = s.miladys.filter(m=>m.job).length, out = s.miladys.filter(m=>m.job && m.away).length;
+      const r = RAIDS.filter(r=>!s.raids.some(x=>x.id===r.id) && out + Math.max(0, r.n - idle) <= Math.floor(workers/4)).pop(); // the best there's a crew for
+      if(r){ const x = doRaid(s, R, r.id); did.x.push(["⚔️", "raided", r.name]); if(live) log("🤖 ⚔️ "+r.n+" miladys left to raid <b>"+r.name+"</b>. back in "+fmtTime(x.len)+"."); }
     }
   }
   if(live && typeof AMBIENT!=="undefined" && AMBIENT.on) AMBIENT.bot(did);
@@ -377,9 +408,17 @@ function liveEvents(s, dt, R){
 }
 
 /* ---------- prices ---------- */
-function priceOf(b, s){
+/* a building that adds storage never costs more than 95% of the storage it adds to: its price grows faster than the
+   room it makes, so without this a long run reaches one it can't fit, and then nothing can ever make that room */
+const STORE_MAX = 0.95;
+const stores = (b, k) => { const f = b.fx || {}; return !!(f["cap."+k] || f["capMult."+k] || f.capAll); };
+const capOf = s => s===S && R ? R.cap : rates(s).cap;
+function priceOf(b, s, cap){
   const n = s.b[b.id] || 0, c = {};
-  for(const k in b.cost) c[k] = b.cost[k] * Math.pow(b.ratio, n);
+  for(const k in b.cost){
+    c[k] = b.cost[k] * Math.pow(b.ratio, n);
+    if(stores(b, k)){ cap = cap || capOf(s); c[k] = Math.min(c[k], cap[k]*STORE_MAX); }
+  }
   return c;
 }
 function techPrice(t, s, f){
@@ -606,7 +645,12 @@ function memeIt(times){
 /* buying buildings by the one, the ten, or as many as you can: the network tab's selector, or shift for ten */
 function priceN(b, s, n){
   const k = s.b[b.id] || 0, c = {}, f = b.ratio===1 ? n : (Math.pow(b.ratio, n) - 1)/(b.ratio - 1);
-  for(const r in b.cost) c[r] = b.cost[r] * Math.pow(b.ratio, k) * f;
+  let cap = null;
+  for(const r in b.cost){
+    if(!stores(b, r)){ c[r] = b.cost[r] * Math.pow(b.ratio, k) * f; continue; }
+    cap = cap || capOf(s); c[r] = 0; // each one held to what fits now (more room after each would only lower the price)
+    for(let i=0; i<n; i++) c[r] += Math.min(b.cost[r] * Math.pow(b.ratio, k+i), cap[r]*STORE_MAX);
+  }
   return c;
 }
 function maxAfford(b, s){
@@ -672,30 +716,60 @@ function touchGrass(into){
   const next = MILESTONES.find(m=>m.n===resets(S)+1);
   const ch = into ? byId(CHALLENGES, into) : null, met = challengeMet(S), cur = S.challenge ? byId(CHALLENGES, S.challenge) : null;
   openModal('<h2>touch grass?</h2><p>you log off. everything you built goes: the miladys, the buildings, the research, every resource.</p>'+
-    '<p>you keep <b>+'+g+' grass 🌿</b>, your perks, your relics, your achievements and your own milady. every grass you hold makes everything '+pct(GRASS_EACH+(R.f.grassEach||0))+' faster.</p>'+
+    '<p>you keep <b>+'+g+' grass 🌿</b>, your perks, your relics, your achievements and your own milady. '+(S.t2 ? "grass is what the new internet is built from." : "every grass you hold makes everything "+pct(GRASS_EACH+(R.f.grassEach||0))+" faster.")+'</p>'+
     (cur ? '<p>'+(met ? '✅ you beat <b>'+cur.name+'</b>: '+cur.rdesc+'.' : '❌ <b>'+cur.name+'</b> isn\'t beaten this time.')+'</p>' : "")+
     (next ? '<p class="unlock-note">🔓 next run opens <b>'+next.name+'</b>: '+next.desc+'</p>' : "")+
     (ch ? '<p class="unlock-note">⚖️ the next run is a challenge: <b>'+ch.name+'</b>. '+ch.rule+'</p>' : "")+
     '<div class="row"><button class="btn big" id="grass-yes">touch grass 🌿</button><button class="btn small" data-close>not yet</button></div>');
   $("grass-yes").onclick = ()=>{
-    const done = Object.assign({}, S.chDone);
-    if(met) done[S.challenge] = true;
-    const history = (S.history||[]).concat({ n:resets(S)+1, t:S.runT, cycles:S.cycle, peak:S.run.peak||S.miladys.length, grass:g, sp:S.run.sp,
-      challenge:S.challenge, beaten:!!met, end:Date.now() }).slice(-50);
-    const keep = { grass:S.grass+g, perks:S.perks, ach:S.ach, you:S.you, who:S.who, settings:S.settings, started:true, relics:S.relics, chDone:done,
-      challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, history, born:S.born,
-      nn:S.nn, auto:S.auto, ended:S.ended, endSeen:S.endSeen, stats:Object.assign(S.stats, { resets:S.stats.resets+1 }), log:[], nextId:S.nextId };
-    S = fresh(keep);
-    applyPerksAtStart(S);
-    closeModal(); sfx.shiny(); FX.grass(); galleryKnown = null; react("calm");
-    log("🌿 you touched grass. +"+g+" grass. the network starts again, and it remembers you.");
+    doTouchGrass(into);
+    closeModal(); sfx.shiny(); FX.grass(); react("calm");
+    log("🌿 you touched grass. +"+g+" grass. the network starts again, and it remembers you. "+shareBtn(resets(S)));
     if(next) log("🔓 new: <b>"+next.name+"</b>. "+next.desc);
     if(met) log("✅ challenge beaten: <b>"+cur.name+"</b>. "+cur.rdesc+".");
     if(ch) log("⚖️ challenge: <b>"+ch.name+"</b>. "+ch.rule);
     tab = "network"; refresh(true);
-    setTimeout(()=>syncUp(), 1000); // a new run is worth keeping straight away
   };
 }
+/* the run ends and a new one starts with what's kept: by you, or by the gardener (bot) */
+let syncSoon = 0;
+function doTouchGrass(into, bot){
+  const g = grassGain(S), met = challengeMet(S), done = Object.assign({}, S.chDone);
+  if(met) done[S.challenge] = true;
+  const history = (S.history||[]).concat({ n:resets(S)+1, t:S.runT, cycles:S.cycle, peak:S.run.peak||S.miladys.length, grass:g, sp:S.run.sp,
+    challenge:S.challenge, beaten:!!met, end:Date.now(), bot:bot ? 1 : undefined }).slice(-50);
+  const garden = bot ? Object.assign({}, S.garden, { runs:S.garden.runs.concat({ t:S.runT, g }).slice(-5) }) : S.garden;
+  const keep = { grass:S.grass+g, perks:S.perks, ach:S.ach, you:S.you, who:S.who, settings:S.settings, started:true, relics:S.relics, chDone:done,
+    challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, history, born:S.born, garden, t2:S.t2, log:S.log.slice(0, 40),
+    nn:S.nn, auto:S.auto, ended:S.ended, endSeen:S.endSeen, stats:Object.assign(S.stats, { resets:S.stats.resets+1 }), nextId:S.nextId };
+  if(!bot) keep.log = [];
+  S = fresh(keep);
+  applyPerksAtStart(S);
+  galleryKnown = null;
+  clearTimeout(syncSoon); syncSoon = setTimeout(()=>syncUp(), 1000); // a new run is worth keeping straight away
+  return g;
+}
+/* ---------- the gardener: touches grass for you ---------- */
+const gardenerOn = s => !!(s.perks.gardener && s.auto.grass);
+const grassRaw = (s, f) => Math.sqrt(s.run.cult/500) * (1 + ((f||sumFx(s)).grass||0)); // grassGain, before it's rounded down
+function gardener(s, R, live){
+  if(!gardenerOn(s) || !s.tech.garden || s.runT < RUN_MIN) return;
+  if(s.challenge && !challengeMet(s)) return; // a challenge run is seen through
+  const g = grassGain(s, R.f); if(g < 1) return;
+  let go;
+  if(s.garden.at==="min") go = g >= s.garden.min;
+  else { // at the best moment: grass a minute has peaked (smoothly, not in whole grass) and is on its way down
+    const rate = grassRaw(s, R.f)/s.runT;
+    if(rate > (s.run.gbest||0)) s.run.gbest = rate;
+    go = rate < s.run.gbest*0.97;
+  }
+  if(!go) return;
+  const t = s.runT, got = doTouchGrass(null, true);
+  if(live){ FX.grass(); log("🤖 🌿 the gardener touched grass after "+fmtTime(t)+": +"+got+" grass. "+shareBtn(resets(S))); refresh(true); }
+}
+const RUN_MIN = 61; // a run shorter than a minute isn't taken by the account service (network_api.py, RUN_MIN)
+/* grass a second the gardener has been bringing in, from its last few runs: what time away is worth */
+function gardenRate(s){ const r = s.garden.runs, t = r.reduce((a, x)=>a + x.t, 0); return t ? r.reduce((a, x)=>a + x.g, 0)/t : 0; }
 function applyPerksAtStart(s){
   if(s.perks.headstart){ s.b.groupchat = 2; s.b.moodboard = 2; s.res.memes = 50; s.seen.memes = 50; s.seen.vibes = 50; }
   if(s.perks.memory) for(const id of ["wallets","memetics","servers"]) s.tech[id] = true;
@@ -703,45 +777,135 @@ function applyPerksAtStart(s){
   if(s.perks.autopilot) for(const id of ["wallets","opensource","inference","agents"]) s.tech[id] = true;
   if(s.perks.faithful){ for(const id of ["memetics","aesthetics","servers","moderation","spirituality","liturgy"]) s.tech[id] = true; s.res.devotion = s.seen.devotion = 100; }
 }
+const perkShown = (s, p) => opened(s, p) && (!p.show || p.show(s));
 function buyPerk(id, card){
   const p = byId(PERKS, id);
-  if(S.perks[id] || S.grass < p.cost || !opened(S, p)) return sfx.no();
+  if(S.perks[id] || S.grass < p.cost || !perkShown(S, p)) return sfx.no();
+  const frozen = S.grass*(GRASS_EACH + (R.f.grassEach||0)); // the bonus as it stands before paying: buying it never costs you any
   S.grass -= p.cost; S.perks[id] = true; sfx.buy(); FX.buy(card, true); react("big");
   log("🌿 perk: <b>"+p.name+"</b>. "+p.desc);
+  if(id==="gardener" && !S.t2){
+    S.t2 = { res:{ signal:0, trust:0, memory:0 }, b:{}, tech:{}, frozen, e0:S.nn.e||0 };
+    log("🌐 the second tier is open, in the new internet. your grass bonus is locked in at <b>+"+pct(frozen)+"</b> for good: grass is for building now.");
+    refresh(true); return;
+  }
   refresh();
+}
+function gardenBox(){
+  const g = S.garden, box = el("div", "garden-box");
+  box.innerHTML = '<div class="nn-h"><b>🤖 the gardener</b><span id="garden-rate"></span></div>'+
+    '<div class="nn-ctl"><button class="tog'+(S.auto.grass ? " on" : "")+'" id="garden-on">'+(S.auto.grass ? "touching grass" : "resting")+'</button>'+
+    '<span class="seg"><button class="pick'+(g.at==="best" ? " on" : "")+'" data-at="best">at the best moment</button><button class="pick'+(g.at==="min" ? " on" : "")+'" data-at="min">once there\'s</button></span>'+
+    (g.at==="min" ? '<label class="garden-min"><input id="garden-min" type="number" min="1" step="1" value="'+g.min+'"> 🌿</label>' : "")+'</div>'+
+    '<p class="note">'+(g.at==="best" ? "it waits until grass a minute has peaked and starts falling, then touches it: the most grass for the time." : "it touches grass as soon as there's at least that much to gain.")+
+    ' it never cuts a challenge run short, and every run lasts at least a minute. while you\'re away, the first ten minutes play out and the rest comes in at the rate its last few runs did.</p>';
+  box.querySelector("#garden-on").onclick = ()=>{ S.auto.grass = !S.auto.grass; refresh(true); };
+  box.querySelectorAll("[data-at]").forEach(b=>b.onclick = ()=>{ g.at = b.dataset.at; refresh(true); });
+  const m = box.querySelector("#garden-min"); if(m) m.onchange = ()=>{ g.min = Math.max(1, Math.round(+m.value||1)); };
+  return box;
+}
+/* ---------- the second tier: built from grass, in the new internet ---------- */
+const t2Icon = k => k==="grass" ? "🌿" : byId(T2_RES, k).icon;
+function t2CostHtml(c){
+  return '<span class="cost">'+Object.keys(c).map(k=>'<i class="'+(t2Have(S, k) >= c[k]-1e-9 ? "ok" : "")+'">'+t2Icon(k)+" "+fmt(c[k])+"</i>").join("")+"</span>";
+}
+function buildT2(body){
+  body.appendChild(el("div", "box-h", "🌐 the second tier <span>built from grass</span>"));
+  const bar = el("div", "t2-bar");
+  bar.innerHTML = '<div class="t2-res"><u>grass</u><b>🌿 <span id="t2-grass"></span></b><em id="t2-grass-r"></em></div>'+
+    T2_RES.map(r=>'<div class="t2-res" title="'+esc(r.desc)+'"><u>'+r.name+'</u><b style="color:'+r.color+'">'+r.icon+' <span id="t2-'+r.id+'"></span></b><em id="t2-'+r.id+'-r"></em></div>').join("");
+  body.appendChild(bar);
+  const grid = el("div", "grid");
+  for(const b of T2_BUILDINGS){
+    const c = card(b.icon+" "+b.name+' <span class="t2n" id="t2n-'+b.id+'"></span>', b.desc, c=>buyT2(b.id, c));
+    c.dataset.t2b = b.id; grid.appendChild(c);
+  }
+  body.appendChild(grid);
+  body.appendChild(el("div", "box-h", "📜 protocols <span>researched once</span>"));
+  const tg = el("div", "grid");
+  for(const t of T2_TECH){
+    const c = card(t.name, t.desc, c=>researchT2(t.id, c));
+    c.dataset.t2t = t.id; if(S.t2.tech[t.id]) c.classList.add("owned"); tg.appendChild(c);
+  }
+  body.appendChild(tg);
+}
+function updateT2(body){
+  if(!S.t2 || !$("t2-grass")) return;
+  $("t2-grass").textContent = fmt(Math.floor(S.grass));
+  const gr = gardenerOn(S) ? gardenRate(S) : 0;
+  $("t2-grass-r").textContent = gr ? "+"+fmt(gr*3600)+"/h" : "";
+  for(const r of T2_RES){ $("t2-"+r.id).textContent = fmt(S.t2.res[r.id]); $("t2-"+r.id+"-r").textContent = R.t2[r.id] ? fmtRate(R.t2[r.id]) : ""; }
+  body.querySelectorAll("[data-t2b]").forEach(c=>{
+    const b = byId(T2_BUILDINGS, c.dataset.t2b), pr = t2Price(S, b);
+    c.querySelector(".cc").innerHTML = t2CostHtml(pr);
+    c.classList.toggle("cant", !t2CanPay(S, pr));
+    const n = S.t2.b[b.id]||0; $("t2n-"+b.id).textContent = n ? "×"+n : "";
+  });
+  body.querySelectorAll("[data-t2t]").forEach(c=>{
+    const t = byId(T2_TECH, c.dataset.t2t);
+    if(S.t2.tech[t.id]){ c.querySelector(".cc").innerHTML = '<span class="done">running</span>'; c.classList.remove("cant"); return; }
+    c.querySelector(".cc").innerHTML = t2CostHtml(t.cost);
+    c.classList.toggle("cant", !t2CanPay(S, t.cost));
+  });
+}
+const t2Have = (s, k) => k==="grass" ? s.grass : s.t2.res[k];
+const t2Price = (s, b) => { const n = s.t2.b[b.id]||0, c = {}; for(const k in b.cost) c[k] = b.cost[k]*Math.pow(b.ratio, n); return c; };
+const t2CanPay = (s, c) => Object.keys(c).every(k=>t2Have(s, k) >= c[k]-1e-9);
+function t2Pay(s, c){ for(const k in c){ if(k==="grass") s.grass = Math.max(0, s.grass - c[k]); else s.t2.res[k] = Math.max(0, s.t2.res[k] - c[k]); } }
+function buyT2(id, card){
+  const b = byId(T2_BUILDINGS, id), c = t2Price(S, b);
+  if(!S.t2 || !t2CanPay(S, c)) return sfx.no();
+  t2Pay(S, c); S.t2.b[id] = (S.t2.b[id]||0) + 1; sfx.buy(); FX.buy(card);
+  if(S.t2.b[id]===1) log(b.icon+" your first <b>"+b.name+"</b>. "+b.desc);
+  refresh();
+}
+function researchT2(id, card){
+  const t = byId(T2_TECH, id);
+  if(!S.t2 || S.t2.tech[id] || !t2CanPay(S, t.cost)) return sfx.no();
+  t2Pay(S, t.cost); S.t2.tech[id] = true; sfx.shiny(); FX.buy(card, true); FX.research();
+  log("📜 protocol: <b>"+t.name+"</b>. "+t.desc);
+  refresh(true);
 }
 
 /* ---------- rituals: spend devotion for something now ---------- */
-function holdRitual(id, card){
-  const r = byId(RITUALS, id), c = ritualPrice(r, R.f);
-  if((S.cd[id]||0) > S.t || !canPay(S, c) || !shown(r)) return sfx.no();
-  pay(S, c);
-  S.cd[id] = S.t + r.cd * Math.max(0.2, 1 + (R.f.ritualCd||0));
-  S.stats.rituals = (S.stats.rituals||0) + 1;
-  react(id==="bull" || id==="airdrop" ? "hype" : "pray");
+/* a ritual, held by you or by the choirmaster: what happened, or null if it couldn't be */
+const ritualOk = (s, R, r) => !!s.tech.iconography && shownIn(s, r) && (s.cd[r.id]||0) <= s.t && canPay(s, ritualPrice(r, R.f));
+function doRitual(s, R, id){
+  const r = byId(RITUALS, id);
+  if(!ritualOk(s, R, r)) return null;
+  pay(s, ritualPrice(r, R.f));
+  s.cd[id] = s.t + r.cd * Math.max(0.2, 1 + (R.f.ritualCd||0));
+  s.stats.rituals = (s.stats.rituals||0) + 1;
   let msg = r.desc;
-  if(id==="prayer") S.buffs.push({ kind:"prayer", happy:0.3, until:S.t+120 });
-  else if(id==="hyperpost") S.buffs.push({ kind:"hyperpost", click:9, until:S.t+30 });
-  else if(id==="vigil") S.buffs.push({ kind:"vigil", all:0.5, until:S.t+120 });
-  else if(id==="airdrop") msg = "airdrop: "+(windfall(120).join(" ") || "nothing fit. build more storage.");
+  if(id==="prayer") s.buffs.push({ kind:"prayer", happy:0.3, until:s.t+120 });
+  else if(id==="hyperpost") s.buffs.push({ kind:"hyperpost", click:9, until:s.t+30 });
+  else if(id==="vigil") s.buffs.push({ kind:"vigil", all:0.5, until:s.t+120 });
+  else if(id==="airdrop") msg = "airdrop: "+(windfall(120, s, R).join(" ") || "nothing fit. build more storage.");
   else if(id==="meetup"){
-    let k = 0; while(k < 10 && S.miladys.length < R.housing){ newMilady(S, R); k++; }
+    let k = 0; while(k < 10 && s.miladys.length < R.housing){ newMilady(s, R); k++; }
     msg = k ? k+" miladys turned up for the meetup." : "nobody came: there's no room.";
   }
   else if(id==="bull"){ // to the start of this cycle's mania if it's still ahead (or under way), otherwise the next one's
-    const at = Math.floor(S.phaseT/PHASE_SECS) % 4, base = Math.floor(S.phaseT/(PHASE_SECS*4)) * PHASE_SECS*4;
-    S.phaseT = base + (at <= 1 ? 1 : 5) * PHASE_SECS; FX.phase(PHASES[1]);
-    if(at > 1){ S.cycle++; S.stats.cycles++; } // skipping ahead into the next cycle still counts it
+    const at = Math.floor(s.phaseT/PHASE_SECS) % 4, base = Math.floor(s.phaseT/(PHASE_SECS*4)) * PHASE_SECS*4;
+    s.phaseT = base + (at <= 1 ? 1 : 5) * PHASE_SECS;
+    if(at > 1){ s.cycle++; s.stats.cycles++; } // skipping ahead into the next cycle still counts it
   }
-  sfx.shiny(); FX.buy(card, true);
+  return msg;
+}
+function ritualFx(id){ react(id==="bull" || id==="airdrop" ? "hype" : "pray"); if(id==="bull") FX.phase(PHASES[1]); }
+function holdRitual(id, card){
+  const r = byId(RITUALS, id), msg = shown(r) ? doRitual(S, R, id) : null;
+  if(msg==null) return sfx.no();
+  ritualFx(id); sfx.shiny(); FX.buy(card, true);
   log(r.icon+" <b>"+r.name+"</b>. "+msg);
   refresh(true);
 }
 /* `secs` seconds of everything you make, into storage */
-function windfall(secs){
+function windfall(secs, s, R2){
+  s = s || S; R2 = R2 || R;
   const got = [];
-  for(const r of RES) if(R.prod[r.id] > 0 && isVisible(r.id)){
-    const g = gain(S, r.id, Math.max(R.prod[r.id]*secs, r.id==="vibes" ? R.click*secs/3 : 0), R.cap[r.id]);
+  for(const r of RES) if(R2.prod[r.id] > 0 && isVisibleIn(s, r.id)){
+    const g = gain(s, r.id, Math.max(R2.prod[r.id]*secs, r.id==="vibes" ? R2.click*secs/3 : 0), R2.cap[r.id]);
     if(g >= 0.5) got.push("+"+fmt(g)+" "+resIcon(r.id));
   }
   return got;
@@ -749,23 +913,30 @@ function windfall(secs){
 
 /* ---------- raids: miladys go out, and come home with loot (most of them) ---------- */
 function raidTime(r, f){ return r.secs / (1 + (f.raidSpeed||0)); }
-function sendRaid(id, card){
-  const r = byId(RAIDS, id), home = S.miladys.filter(m=>!m.away);
-  if(!S.tech.raiding || home.length < r.n || S.raids.some(x=>x.id===id)) return sfx.no();
+/* a raid sent, by you or by the war council: the raid, or null if there's no crew for it */
+function doRaid(s, R, id){
+  const r = byId(RAIDS, id), home = s.miladys.filter(m=>!m.away);
+  if(!s.tech.raiding || home.length < r.n || s.raids.some(x=>x.id===id)) return null;
   // the idle go first, then whoever's on the busiest job
   const crew = [];
   for(const m of home.filter(m=>!m.job)) if(crew.length < r.n) crew.push(m);
   while(crew.length < r.n){
-    const c = jobCounts(S), busiest = JOBS.filter(j=>c[j.id]).sort((a,b)=>c[b.id]-c[a.id])[0];
+    const c = jobCounts(s), busiest = JOBS.filter(j=>c[j.id]).sort((a,b)=>c[b.id]-c[a.id])[0];
     const m = home.find(m=>m.job===busiest.id && !crew.includes(m)); m.away = id; crew.push(m);
   }
   crew.forEach(m=>m.away = id);
   // what they bring home is set now, from what the network makes as they leave
   const loot = {};
-  for(const k in r.loot) if(isVisible(k)) loot[k] = Math.max(R.prod[k], 0.5) * r.loot[k];
-  S.raids.push({ id, until:S.t + raidTime(r, R.f), len:raidTime(r, R.f), loot });
+  for(const k in r.loot) if(isVisibleIn(s, k)) loot[k] = Math.max(R.prod[k], 0.5) * r.loot[k];
+  const x = { id, until:s.t + raidTime(r, R.f), len:raidTime(r, R.f), loot };
+  s.raids.push(x);
+  return x;
+}
+function sendRaid(id, card){
+  const r = byId(RAIDS, id), x = doRaid(S, R, id);
+  if(!x) return sfx.no();
   sfx.buy(); FX.buy(card);
-  log("⚔️ "+r.n+" miladys left to raid <b>"+r.name+"</b>. back in "+fmtTime(raidTime(r, R.f))+".");
+  log("⚔️ "+r.n+" miladys left to raid <b>"+r.name+"</b>. back in "+fmtTime(x.len)+".");
   refresh(true);
 }
 function raidHome(s, i, live){
@@ -790,12 +961,20 @@ function raidHome(s, i, live){
 }
 
 /* ---------- the cathedral ---------- */
-function buildStage(card){
-  const i = S.wonder||0; if(i >= WONDER.length || !S.tech.geometry) return sfx.no();
+/* the cathedral's next stage, built by you or by the masons: false if it can't be */
+function doStage(s, R){
+  const i = s.wonder||0; if(i >= WONDER.length || !s.tech.geometry) return false;
   const c = wonderPrice(i, R.f);
-  if(!canPay(S, c)) return sfx.no();
-  pay(S, c); S.wonder = i+1; sfx.shiny(); FX.buy(card, true); FX.research(); react("shiny");
-  log("⛪ the cathedral: <b>"+WONDER[i].name+"</b> is finished."+(S.wonder===WONDER.length ? " it's done. it was always going to be infinite." : ""));
+  if(!canPay(s, c)) return false;
+  pay(s, c); s.wonder = i+1;
+  return true;
+}
+const stageLog = (s, w, bot) => log((bot ? "🤖 " : "")+"⛪ the cathedral: <b>"+w.name+"</b> is finished."+(s.wonder===WONDER.length ? " it's done. it was always going to be infinite." : ""));
+function buildStage(card){
+  const w = WONDER[S.wonder||0];
+  if(!doStage(S, R)) return sfx.no();
+  sfx.shiny(); FX.buy(card, true); FX.research(); react("shiny");
+  stageLog(S, w);
   refresh(true);
 }
 
@@ -829,11 +1008,12 @@ function catchSparkle(){
 /* ---------- what's on the page ---------- */
 function shownIn(s, x){ return opened(s, x) && (!x.tech || s.tech[x.tech]) && (!x.show || x.show(s)); }
 const shown = x => shownIn(S, x);
-function isVisible(id){
+function isVisibleIn(s, id){
   const r = RES_BY[id];
-  if(id==="vibes" || S.seen[id] > 0) return true;
-  return opened(S, r) && (r.tech ? !!S.tech[r.tech] : r.show ? r.show(S) : false);
+  if(id==="vibes" || s.seen[id] > 0) return true;
+  return opened(s, r) && (r.tech ? !!s.tech[r.tech] : r.show ? r.show(s) : false);
 }
+const isVisible = id => isVisibleIn(S, id);
 const techShownIn = (s, t) => opened(s, t) && (s.b.archive>0 || s.seen.lore>0) && (t.req||[]).every(r=>s.tech[r]);
 const techShown = t => techShownIn(S, t);
 function tabs(){
@@ -965,18 +1145,27 @@ function buildNetwork(body){
   if(!grid.children.length) body.appendChild(el("p", "note", "post a little. things show up once you can almost afford them."));
 }
 /* the robots you've bought, each with an off switch, and how much they've done this run */
-const AUTO_WHAT = { meme:["automeme","🐸 memes"], tech:["autotech","📜 research"], up:["autoup","✨ upgrades"], build:["autobuild","🏗️ buildings"] };
+const AUTO_WHAT = { meme:["automeme","🐸 memes"], tech:["autotech","📜 research"], up:["autoup","✨ upgrades"], build:["autobuild","🏗️ buildings"],
+  rite:["autorite","🕯️ rituals"], raid:["autoraid","⚔️ raids"], wonder:["autowonder","⛪ cathedral"], grass:["gardener","🌿 touching grass"] };
 function autoBox(){
   const a = S.auto, box = el("div", "auto-box");
   box.innerHTML = '<span class="auto-h">🤖 automation</span>'+
     Object.keys(AUTO_WHAT).filter(k=>S.perks[AUTO_WHAT[k][0]]).map(k=>'<button class="tog'+(a[k] ? " on" : "")+'" data-auto="'+k+'">'+AUTO_WHAT[k][1]+'</button>').join("")+
     (S.perks.autobuild ? '<span class="seg" title="what buildings never dip into">keep '+[0, 0.25, 0.5].map(v=>'<button class="pick'+(a.keep===v ? " on" : "")+'" data-keep="'+v+'">'+pct(v)+'</button>').join("")+'</span>'+
       '<button class="btn small" id="auto-skip">'+(Object.values(a.skip).some(Boolean) ? "skipping "+Object.values(a.skip).filter(Boolean).length : "skip some")+'</button>' : "")+
+    (S.perks.autorite ? '<button class="btn small" id="auto-rites">which rituals</button>' : "")+
     '<span class="auto-ct" id="auto-ct"></span>';
   box.querySelectorAll("[data-auto]").forEach(b=>b.onclick = ()=>{ a[b.dataset.auto] = !a[b.dataset.auto]; refresh(true); });
   box.querySelectorAll("[data-keep]").forEach(b=>b.onclick = ()=>{ a.keep = +b.dataset.keep; refresh(true); });
   const skip = box.querySelector("#auto-skip"); if(skip) skip.onclick = openSkip;
+  const rites = box.querySelector("#auto-rites"); if(rites) rites.onclick = openRites;
   return box;
+}
+function openRites(){
+  openModal('<h2>🤖 what the choirmaster holds</h2><p class="note">each ticked ritual is held the moment it\'s ready and there\'s devotion for it. summon the bull moves the market, and a meetup can fill the room, so those start off.</p><div class="skip-list">'+
+    RITUALS.filter(r=>shown(r)).map(r=>'<button class="tog'+(S.auto.rites[r.id] ? " on" : "")+'" data-rite="'+r.id+'">'+r.icon+" "+r.name+'</button>').join("")+
+    '</div><div class="row"><button class="btn small" data-close>done</button></div>');
+  document.querySelectorAll("#modal [data-rite]").forEach(x=>x.onclick = ()=>{ const id = x.dataset.rite; S.auto.rites[id] = !S.auto.rites[id]; x.classList.toggle("on", !!S.auto.rites[id]); });
 }
 function openSkip(){
   const list = BUILDINGS.filter(b=>shown(b) || S.b[b.id]);
@@ -1152,16 +1341,17 @@ function buildNewnet(body){
   if(S.ended){
     body.appendChild(el("p", "big-note", "🌐 the new internet is online, since "+new Date(S.ended).toLocaleDateString()+". it doesn't need you to keep it going. it'd like you to stay anyway."));
     const b = el("button", "btn small", "watch the ending again"); b.onclick = ()=>showEnding(); body.appendChild(b);
-    body.appendChild(el("div", "box-h", "♾️ epochs <span>"+(e ? e+" done · "+fxDesc({ all:EPOCH_FX.all*e })+", for good" : "it keeps growing")+"</span>"));
+    if(S.t2) buildT2(body);
+    body.appendChild(el("div", "box-h", "♾️ epochs <span>"+(e ? e+" done · "+fxDesc({ all:EPOCH_FX.all*e })+", for good" : "it keeps growing")+(S.t2 ? " · poured from the second tier" : "")+"</span>"));
   }
   const box = el("div", "nn-box");
   box.innerHTML = '<div class="nn-h"><b>'+st.icon+" "+st.name+'</b><span>'+(S.ended ? "past the ending, as far as it goes · " : "stage "+(i+1)+" of "+NEWNET.length+" · ")+st.desc+'</span></div>'+
-    Object.keys(st.need).map(k=>'<div class="nn-row" data-nn="'+k+'"><span>'+resIcon(k)+" "+RES_BY[k].name+'</span><i class="pbar"><u></u></i><b></b><em></em></div>').join("")+
+    Object.keys(st.need).map(k=>'<div class="nn-row" data-nn="'+k+'"><span>'+(RES_BY[k] ? resIcon(k)+" "+RES_BY[k].name : t2Icon(k)+" "+byId(T2_RES, k).name)+'</span><i class="pbar"><u></u></i><b></b><em></em></div>').join("")+
     (st.req ? '<div class="nn-req" id="nn-req"></div>' : "")+
     '<div class="nn-ctl"><button class="tog'+(S.nn.on ? " on" : "")+'" id="nn-on">'+(S.nn.on ? "pouring" : "paused")+'</button>'+
     '<span class="seg" title="how much of what you make goes in">'+[0.25, 0.5, 1].map(v=>'<button class="pick'+(S.nn.share===v ? " on" : "")+'" data-share="'+v+'">'+pct(v)+'</button>').join("")+'</span>'+
     '<button class="btn small" id="nn-pour-now">pour in what you\'re holding</button></div>'+
-    '<p class="note">while it\'s pouring, that share of everything the stage needs goes in as you make it, and all of it once storage is full. what goes in stays when you touch grass.</p>';
+    '<p class="note">'+(inT2(S) ? "while it\'s pouring, that share of what the second tier makes goes in as it's made." : "while it\'s pouring, that share of everything the stage needs goes in as you make it, and all of it once storage is full. what goes in stays when you touch grass.")+'</p>';
   body.appendChild(box);
   $("nn-on").onclick = ()=>{ S.nn.on = !S.nn.on; refresh(true); };
   box.querySelectorAll("[data-share]").forEach(b=>b.onclick = ()=>{ S.nn.share = +b.dataset.share; refresh(true); });
@@ -1170,10 +1360,12 @@ function buildNewnet(body){
 function buildGrass(body){
   const top = el("div", "grass-top");
   top.innerHTML = '<div class="big-num">🌿 <b id="grass-have">0</b> grass</div>'+
-    '<div class="note">every grass you hold makes everything <b>'+pct(GRASS_EACH+(R.f.grassEach||0))+'</b> faster. right now: <b id="grass-bonus"></b>.</div>'+
+    (S.t2 ? '<div class="note">your grass bonus is locked in at <b id="grass-bonus"></b>, for good. grass is for building in the new internet now.</div>'
+      : '<div class="note">every grass you hold makes everything <b>'+pct(GRASS_EACH+(R.f.grassEach||0))+'</b> faster. right now: <b id="grass-bonus"></b>.</div>')+
     '<div class="note">grass comes from the $CULT you made this run: <b id="grass-run"></b> so far. touching grass now gives <b id="grass-gain"></b>.</div>'+
     '<button class="btn big" id="btn-grass">touch grass 🌿</button><div class="note" id="grass-why"></div>';
   body.appendChild(top);
+  if(S.perks.gardener) body.appendChild(gardenBox());
   // what each reset opens: the past ones lit, the next one named, the rest a mystery
   body.appendChild(el("div", "box-h", "every time you touch grass <span>"+resets(S)+" so far</span>"));
   const ms = el("div", "milestones");
@@ -1194,14 +1386,14 @@ function buildGrass(body){
   body.appendChild(el("div", "box-h", "perks <span>kept forever</span>"));
   const grid = el("div", "grid");
   for(const p of PERKS){
-    if(!opened(S, p)) continue;
+    if(!perkShown(S, p)) continue;
     const c = card(p.name+NEW_LAYER(p), p.desc, c=>buyPerk(p.id, c));
     c.dataset.p = p.id;
     if(S.perks[p.id]) c.classList.add("owned");
     grid.appendChild(c);
   }
   body.appendChild(grid);
-  const hidden = PERKS.filter(p=>!opened(S, p)).length;
+  const hidden = PERKS.filter(p=>!perkShown(S, p)).length;
   if(hidden) body.appendChild(el("p", "note", hidden+" more perks open as you keep touching grass."));
   $("btn-grass").onclick = ()=>touchGrass();
 }
@@ -1597,6 +1789,7 @@ function update(){
     const c = S.run.auto;
     $("auto-ct").textContent = "this run: "+[c.b && fmt(c.b)+" built", c.t && c.t+" researched", c.u && c.u+" upgrades", c.m && fmt(c.m)+" memes"].filter(Boolean).join(" · ") || "this run: nothing yet";
   }
+  updateT2(body);
   const st = nnStage(S);
   if(st) body.querySelectorAll("[data-nn]").forEach(row=>{
     const k = row.dataset.nn, got = S.nn.got[k]||0, need = st.need[k], left = need - got, rate = S.nn.on ? pourRate(S, R, k) : 0;
@@ -1613,8 +1806,9 @@ function update(){
   if($("speed-left")) $("speed-left").textContent = S.runT <= 5400 ? fmtTime(5400 - S.runT)+" left." : "out of time.";
   if($("grass-have")){
     const g = grassGain(S, R.f);
-    $("grass-have").textContent = S.grass;
-    $("grass-bonus").textContent = "+"+pct(S.grass*(GRASS_EACH+(R.f.grassEach||0)));
+    $("grass-have").textContent = fmt(Math.floor(S.grass));
+    $("grass-bonus").textContent = "+"+pct(S.t2 ? S.t2.frozen : S.grass*(GRASS_EACH+(R.f.grassEach||0)));
+    if($("garden-rate")){ const r = gardenRate(S); $("garden-rate").textContent = r ? fmt(r*3600)+" 🌿 an hour, lately" : "no runs yet"; }
     $("grass-run").textContent = fmt(S.run.cult)+" $CULT";
     $("grass-gain").textContent = "+"+g+" 🌿";
     $("btn-grass").disabled = !S.tech.garden || g<1;
@@ -1966,19 +2160,31 @@ function catchUp(quiet){
   if(!awaySnap) awaySnap = { secs:0, res:Object.assign({}, S.res), people:S.miladys.length, firstId:S.nextId, raids:S.stats.raids||0,
     relics:Object.assign({}, S.relics), cycles:S.cycle, nn:S.nn.i, ep:S.nn.e||0 };
   awaySnap.secs += Math.max(0, gone);
-  const step = Math.max(1, gone/20000);
-  for(let t=0; t<gone; t+=step) tick(S, Math.min(step, gone-t), false);
+  // with the gardener, only the first ten minutes are played out (so it can finish the run it was on); the rest is
+  // grass at the rate its recent runs brought it in (a little under), and whatever the second tier makes meanwhile
+  const sim = gardenerOn(S) && gardenRate(S) > 0 ? Math.min(gone, 600) : gone, rest = gone - sim;
+  awaySnap.resets = awaySnap.resets==null ? resets(S) : awaySnap.resets;
+  const step = Math.max(1, sim/20000);
+  for(let t=0; t<sim; t+=step) tick(S, Math.min(step, sim-t), false);
+  if(rest > 0){
+    const gr = gardenRate(S)*rest*0.9, R2 = rates(S);
+    S.grass += gr; S.garden.away += gr; S.stats.played += rest;
+    if(S.t2) for(const r of T2_RES) S.t2.res[r.id] += R2.t2[r.id]*rest;
+    awaySnap.harvest = (awaySnap.harvest||0) + gr;
+  }
   if(quiet) return;
   const snap = awaySnap; awaySnap = null;
   const away = snap.secs, before = snap.res, people = snap.people, firstId = snap.firstId, raids = snap.raids, relics = snap.relics, cycles = snap.cycles;
-  const got = RES.filter(r=>isVisible(r.id) && Math.abs(S.res[r.id]-before[r.id]) >= 1)
+  const got = resets(S) > (snap.resets||0) ? "" : RES.filter(r=>isVisible(r.id) && Math.abs(S.res[r.id]-before[r.id]) >= 1)
     .map(r=>'<span class="chip">'+(S.res[r.id]>=before[r.id] ? "+" : "")+fmt(S.res[r.id]-before[r.id])+" "+resIcon(r.id)+"</span>").join(" ");
   const joined = S.nextId - firstId, left = joined - (S.miladys.length - people), back = (S.stats.raids||0) - raids;
   const found = RELICS.filter(r=>(S.relics[r.id]||0) > (relics[r.id]||0)).map(r=>r.icon+" "+r.name+(S.relics[r.id]>1 ? " (lv "+S.relics[r.id]+")" : ""));
   const lines = [joined && "🌸 "+joined+" miladys joined", left > 0 && "🥀 "+left+" logged off", back && "⚔️ "+back+" raid"+(back>1 ? "s" : "")+" came home",
     found.length && "🗿 relics: "+found.join(", "), S.cycle > cycles && "📈 the market went round "+(S.cycle-cycles)+" time"+(S.cycle-cycles>1 ? "s" : ""),
     S.nn.i > snap.nn && "🌐 finished "+NEWNET.slice(snap.nn, S.nn.i).map(s=>s.name).join(", "),
-    (S.nn.e||0) > snap.ep && "♾️ "+((S.nn.e||0) - snap.ep)+" epoch"+((S.nn.e||0) - snap.ep > 1 ? "s" : "")+" of the new internet done"].filter(Boolean);
+    (S.nn.e||0) > snap.ep && "♾️ "+((S.nn.e||0) - snap.ep)+" epoch"+((S.nn.e||0) - snap.ep > 1 ? "s" : "")+" of the new internet done",
+    resets(S) > snap.resets && "🤖 the gardener touched grass "+(resets(S) - snap.resets)+" time"+(resets(S) - snap.resets > 1 ? "s" : ""),
+    snap.harvest >= 1 && "🌿 "+fmt(snap.harvest)+" grass came in while you were gone, at the rate the gardener's been going"].filter(Boolean);
   const msg = "while you were away ("+fmtTime(away)+"): "+(got || "nothing much.")+(lines.length ? " "+lines.join(" · ")+"." : "");
   if(away < 60) return; // a tab that was in the background a moment isn't worth a message
   log("🌙 "+msg);
@@ -2474,8 +2680,10 @@ async function openProfile(handle){
   const nn = p.online ? (p.epochs ? "♾️ "+p.epochs : "🌐 on") : p.stage+" / "+NEWNET.length;
   const order = Object.keys(BOARD_INFO).filter(k=>p.ranks[k]).concat(CHALLENGES.map(c=>"ch_"+c.id).filter(k=>p.ranks[k]));
   const relics = RELICS.filter(x=>p.relics[x.id]).sort((a, b)=>p.relics[b.id]-p.relics[a.id]);
+  const mine = acct() && acct().handle===p.handle;
   const run = x => { const ch = x.challenge && byId(CHALLENGES, x.challenge);
-    return '<div class="prun"><i>#'+x.n+'</i><b>'+fmtTime(x.t)+'</b><span>peak '+fmt(x.peak||0)+' · +'+fmt(x.grass||0)+' 🌿</span>'+(ch ? '<u class="'+(x.beaten ? "won" : "")+'">'+(x.beaten ? "✅ " : "")+ch.name+'</u>' : "<u></u>")+'</div>'; };
+    return '<div class="prun'+(mine ? " mine" : "")+'"><i>#'+x.n+'</i><b>'+fmtTime(x.t)+'</b><span>peak '+fmt(x.peak||0)+' · +'+fmt(x.grass||0)+' 🌿</span>'+(ch ? '<u class="'+(x.beaten ? "won" : "")+'">'+(x.beaten ? "✅ " : "")+ch.name+'</u>' : "<u></u>")+
+      (mine ? '<button class="pshare" data-share-run="'+x.n+'" title="share this run" aria-label="share run '+x.n+'">📸</button>' : "")+'</div>'; };
   openModal('<div class="prof">'+
       '<canvas id="prof-cv" class="portrait" width="'+K.w+'" height="'+K.h+'"></canvas>'+
       '<h2>'+whoTag(p.handle)+(acct() && acct().handle===p.handle ? ' <small class="you-tag">you</small>' : "")+'</h2>'+
@@ -2486,11 +2694,53 @@ async function openProfile(handle){
         return '<button class="prank'+(x.rank<=3 ? " top r"+x.rank : "")+'" data-pb="'+k+'"><i>'+(x.rank<=3 ? ["🥇","🥈","🥉"][x.rank-1] : "#"+x.rank)+'</i><b>'+boardInfo(k)[0]+'</b><span>'+boardValue(k, Object.assign({ detail:{} }, x))[0]+' · of '+x.total+'</span></button>'; }).join("")+'</div>' : "")+
       (relics.length ? '<div class="box-h">relics <span>'+relics.length+' of '+RELICS.length+'</span></div><div class="prelics">'+relics.map(x=>'<span title="'+esc(x.name)+'">'+x.icon+(p.relics[x.id]>1 ? '<sub>'+p.relics[x.id]+'</sub>' : "")+'</span>').join("")+'</div>' : "")+
       (p.last.length ? '<div class="box-h">last runs</div><div class="pruns">'+p.last.map(run).join("")+'</div>' : "")+
-    '</div><div class="row"><button class="btn small" data-close>close</button></div>');
+    '</div><div class="row">'+(mine ? '<button class="btn small" id="prof-share">📸 share your network</button>' : "")+'<button class="btn small" data-close>close</button></div>');
+  if($("prof-share")) $("prof-share").onclick = ()=>shareCard("net");
   $("modal-panel").querySelectorAll("[data-pb]").forEach(b=>b.onclick = ()=>{
     const k = b.dataset.pb; if(k.startsWith("ch_")) boardCh = k.slice(3);
     boardKey = k; closeModal(); if(tab!=="boards"){ tab = "boards"; } refresh(true); });
   if(f) compose(f.look, false, f.kind).then(cv=>{ const c = $("prof-cv"); if(c) c.getContext("2d").drawImage(cv, 0, 0); }).catch(()=>{});
+}
+
+/* ---------- sharing: a card of your network, a run, or the ending, drawn by the service from what it holds ---------- */
+const shareBtn = n => '<button class="ln-share" data-share-run="'+n+'">share it 📸</button>';
+document.addEventListener("click", e=>{ const b = e.target.closest("[data-share-run]"); if(b){ e.stopPropagation(); shareCard("run", +b.dataset.shareRun); } });
+async function synced(){ // the service has to have it before it can put it on a card
+  for(let i=0; syncing && i<40; i++) await new Promise(r=>setTimeout(r, 250));
+  await syncUp();
+}
+const SITE_URL = "https://clicker.tylerirl.com/";
+async function shareCard(kind, n){
+  const a = acct();
+  if(!a || !online()){ // no account, no card: the words and the game
+    const text = kind==="online" ? "i turned on the new internet" : kind==="run" ? "i touched grass in the network is growing" : "my network is growing: "+fmt(S.miladys.length)+" miladys";
+    return shareSheet({ text, share:SITE_URL }, '<p class="note">sign in and your share comes with a card: your milady, your network and where you stand on the boards.</p>');
+  }
+  openModal('<h2>share</h2><div class="share-card skel"><i></i></div><p class="note" id="share-note">making your card…</p>');
+  await synced();
+  const r = await api("/api/net/card", { session:a.token, kind, n });
+  if($("modal").classList.contains("hidden") || !$("share-note")) return;
+  if(r.status!==200) return $("share-note").textContent = r.status===429 ? "that's a lot of cards. try again in a bit." : r.status===404 ? "the service doesn't have that yet. try again in a minute." : "the card can't be made right now.";
+  shareSheet(r.data);
+}
+function shareSheet(d, extra){
+  const text = d.text+" "+d.share, x = "https://x.com/intent/post?text="+encodeURIComponent(d.text)+"&url="+encodeURIComponent(d.share);
+  openModal('<h2>share</h2>'+(d.image ? '<div class="share-card"><img id="share-img" alt="your share card" src="'+esc(d.image)+'"></div>' : "")+(extra||"")+
+    '<div class="share-text">'+esc(text)+'</div>'+
+    '<div class="row share-row">'+(navigator.share ? '<button class="btn small" id="sh-native">share…</button>' : "")+
+      '<a class="btn small" href="'+esc(x)+'" target="_blank" rel="noopener">post to 𝕏</a><button class="btn small" id="sh-copy">copy link</button>'+
+      (d.image ? '<button class="btn small" id="sh-save">save card</button>' : "")+'<button class="btn small" data-close>close</button></div>');
+  const img = $("share-img"); if(img) img.onload = ()=>img.parentNode.classList.add("ready");
+  const blob = ()=> d.image ? fetch(d.image).then(r=>r.ok ? r.blob() : null).catch(()=>null) : Promise.resolve(null);
+  $("sh-copy").onclick = async ()=>{ try{ await navigator.clipboard.writeText(text); toast("📋 copied"); }catch(e){ toast("couldn't copy. the link is "+esc(d.share), 6000); } };
+  if($("sh-save")) $("sh-save").onclick = async ()=>{
+    const b = await blob(); if(!b) return toast("the card can't be saved right now");
+    const u = URL.createObjectURL(b), l = document.createElement("a"); l.href = u; l.download = "the-network-is-growing-"+d.id+".png"; document.body.appendChild(l); l.click(); l.remove();
+    setTimeout(()=>URL.revokeObjectURL(u), 5000); };
+  if($("sh-native")) $("sh-native").onclick = async ()=>{ // on a phone: the card itself goes with it, where that's allowed
+    const b = await blob(), file = b && new File([b], "the-network-is-growing.png", { type:"image/png" });
+    try{ await navigator.share(Object.assign({ text:d.text, url:d.share }, file && navigator.canShare && navigator.canShare({ files:[file] }) ? { files:[file] } : {})); }catch(e){}
+  };
 }
 
 /* ---------- the app: installs, and plays offline ---------- */
@@ -2561,11 +2811,12 @@ function showEnding(){
         .map(([k,v])=>'<div><span>'+k+'</span><b>'+v+'</b></div>').join("")+'</div>'+
     '<div class="end-credits" style="--d:'+(0.6+lines.length*2.1+3.4)+'s"><p>made by <a href="https://tylerirl.com/" target="_blank" rel="noopener">tyler (in real life)</a> · trait art: remilia corporation, copyleft · not affiliated</p>'+
       '<p>the network was always going to be infinite. thank you for growing it.</p>'+
-      '<div class="row"><button class="btn big" id="end-stay">keep posting</button><a class="btn small" href="https://cancel.tylerirl.com/">play the cancel is coming ↗</a></div></div>'+
+      '<div class="row"><button class="btn big" id="end-stay">keep posting</button><button class="btn small" id="end-share">share it 📸</button><a class="btn small" href="https://cancel.tylerirl.com/">play the cancel is coming ↗</a></div></div>'+
     '<button class="btn small end-skip" id="end-skip">skip</button></div>';
   document.body.appendChild(ov);
   const close = ()=>{ ov.classList.add("out"); FX.ending(false); setTimeout(()=>ov.remove(), 900); refresh(true); };
   $("end-stay").onclick = close;
+  $("end-share").onclick = ()=>{ close(); shareCard("online"); };
   $("end-skip").onclick = ()=>{ ov.classList.add("skip"); $("end-skip").remove(); };
   ov.querySelector('a[href*="cancel"]').addEventListener("click", save);
 }
@@ -2613,7 +2864,13 @@ async function init(){
   document.querySelectorAll(".tv").forEach(b=>b.onclick = e=>{ e.stopPropagation(); AMBIENT.start(); });
   for(const ev of ["pointerdown", "keydown"]) addEventListener(ev, ()=>{ lastTouch = Date.now(); }, { passive:true });
   checkVersion(); setInterval(checkVersion, 5*60*1000);
-  checkNet(); renderAcctAll();
+  checkNet().then(()=>{ // a shared link brings people here with ?p=handle: open that player's card
+    const p = new URLSearchParams(location.search).get("p");
+    if(!p || !netOn || netOn.down) return;
+    try{ history.replaceState(null, "", location.pathname); }catch(e){}
+    openProfile(p);
+  });
+  renderAcctAll();
   if(note) toast(note, 5000);
   if(acct()){ setTimeout(()=>syncUp(), 3000); setInterval(()=>syncUp(), 60*1000); setInterval(renderAcctAll, 15*1000); }
 }

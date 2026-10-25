@@ -277,6 +277,12 @@ const PERKS = [
   { id:"autotech",  name:"grad students",   cost:12, fx:{}, auto:"tech",  desc:"🤖 research does itself, the cheapest first.", ng:3 },
   { id:"autobuild", name:"scripts",         cost:15, fx:{}, auto:"build", desc:"🤖 buildings buy themselves out of what's spare, the cheapest for your storage first.", ng:3 },
   { id:"autoup",    name:"personal shopper",cost:12, fx:{}, auto:"up",    desc:"🤖 upgrades buy themselves.", ng:4 },
+  { id:"autorite",  name:"choirmaster",     cost:10, fx:{}, auto:"rite",  desc:"🤖 rituals are held as soon as they're ready: the ones you tick.", ng:2 },
+  { id:"autoraid",  name:"war council",     cost:10, fx:{}, auto:"raid",  desc:"🤖 raiders go back out on the best raid there's a crew for, idle miladys first, never more than a quarter of the workers.", ng:3 },
+  { id:"autowonder",name:"masons",          cost:12, fx:{}, auto:"wonder",desc:"🤖 the cathedral builds its next stage as soon as it's affordable.", ng:4 },
+  /* the big one: once the new internet is on, the gardener touches grass for you, and grass becomes something to spend */
+  { id:"gardener",  name:"the gardener",    cost:100, fx:{}, auto:"grass", ng:6, show:s=>!!s.ended && !!s.perks.autotech, // it needs the grad students to reach the garden each run
+    desc:"🤖 touches grass for you, at the best moment or once there's as much as you say. grass stops being a bonus and becomes what the new internet is built from: your bonus now is locked in, for good." },
 ];
 
 /* what each reset opens, shown in the grass tab so the next one is something to look forward to */
@@ -305,19 +311,54 @@ const NEWNET = [
 /* after the ending: the new internet keeps growing, an epoch at a time, poured into the same way. There's no last one:
    each asks for half again what the one before did, from a different mix, and each is +10% everything for good. */
 const EPOCH_GROW = 1.5, EPOCH_FX = { all:0.1 };
+/* need: from the first tier's resources. need2: from the second tier's, once the gardener has it running (counted
+   from the epoch it opened on, so a player far along doesn't start the second tier owing half again per epoch) */
 const EPOCHS = [
-  { name:"uptime",           desc:"keep it running. that's the whole job now.",   need:{vibes:1.2e8,  memes:3e7} },
-  { name:"the long tail",    desc:"everyone who was ever too shy to post.",       need:{lore:4e7,     compute:1.6e7} },
-  { name:"mirrors",          desc:"copies of everything, everywhere.",            need:{cult:3e7,     drip:1e7} },
-  { name:"federation",       desc:"other networks ask to join.",                  need:{clout:1.6e7,  devotion:5e6} },
-  { name:"the commons",      desc:"a park in the middle of it, for nobody.",      need:{ether:1e6,    vibes:1.6e8} },
-  { name:"dead links",       desc:"bring back every page that went missing.",     need:{memes:5e7,    lore:4e7, ether:5e5} },
+  { name:"uptime",           desc:"keep it running. that's the whole job now.",   need:{vibes:1.2e8,  memes:3e7},             need2:{signal:2e4,  trust:2000} },
+  { name:"the long tail",    desc:"everyone who was ever too shy to post.",       need:{lore:4e7,     compute:1.6e7},          need2:{trust:4000,  memory:300} },
+  { name:"mirrors",          desc:"copies of everything, everywhere.",            need:{cult:3e7,     drip:1e7},               need2:{signal:5e4,  memory:500} },
+  { name:"federation",       desc:"other networks ask to join.",                  need:{clout:1.6e7,  devotion:5e6},           need2:{signal:4e4,  trust:6000} },
+  { name:"the commons",      desc:"a park in the middle of it, for nobody.",      need:{ether:1e6,    vibes:1.6e8},            need2:{trust:5000,  memory:800} },
+  { name:"dead links",       desc:"bring back every page that went missing.",     need:{memes:5e7,    lore:4e7, ether:5e5},    need2:{signal:6e4,  trust:6000, memory:600} },
 ];
-function epochStage(e){
-  const E = EPOCHS[e % EPOCHS.length], x = Math.pow(EPOCH_GROW, e), need = {};
-  for(const k in E.need) need[k] = Math.round(E.need[k]*x/1000)*1000;
+/* o: { t2, from, mult }: the second tier's needs, counted from epoch `from`, times `mult` (a protocol can lower it) */
+function epochStage(e, o){
+  o = o || {};
+  const E = EPOCHS[e % EPOCHS.length], x = Math.pow(EPOCH_GROW, o.t2 ? Math.max(0, e - (o.from||0)) : e) * (o.mult||1), need = {};
+  const base = o.t2 ? E.need2 : E.need, round = o.t2 ? 10 : 1000;
+  for(const k in base) need[k] = Math.round(base[k]*x/round)*round;
   return { id:"epoch", icon:"♾️", name:"epoch "+(e+1)+": "+E.name, desc:E.desc, need, fx:EPOCH_FX };
 }
+
+/* ---------- the second tier: the new internet, running ----------
+   Once the gardener touches grass for you, grass is something to spend, the way vibes is in the first tier. It's
+   built into the new internet, which makes signal, trust and memory. Buildings make them by themselves (there's no
+   one to feed); protocols are researched once. Some of it reaches back: the first tier goes faster, and every time
+   the gardener touches grass there's more of it. Epochs are poured from it. Each epoch is +10% to this tier too. */
+const T2_RES = [
+  { id:"signal", name:"signal", icon:"📡", color:"#8be9fd", desc:"the new internet talking to itself. relays and nodes make it." },
+  { id:"trust",  name:"trust",  icon:"🤝", color:"#50fa7b", desc:"everyone believing everyone, a little. the mesh makes it." },
+  { id:"memory", name:"memory", icon:"🗄️", color:"#bd93f9", desc:"what the archive keeps. name servers and archive shards make it." },
+];
+const T2_BUILDINGS = [
+  { id:"relay",     name:"relay",         icon:"📡", cost:{grass:5},                           ratio:1.15, fx:{"t2.signal":0.5},                   desc:"passes the signal along. +0.5 📡/s." },
+  { id:"node",      name:"node",          icon:"🖥️", cost:{grass:40,  signal:60},              ratio:1.17, fx:{"t2.signal":3, "t2.trust":0.1},     desc:"a milady runs one. +3 📡/s, +0.1 🤝/s." },
+  { id:"mesh",      name:"mesh link",     icon:"🕸️", cost:{grass:120, signal:400},             ratio:1.18, fx:{"t2.trust":0.6},                    desc:"a thread between two nodes. +0.6 🤝/s." },
+  { id:"namesrv",   name:"name server",   icon:"🏷️", cost:{grass:300, trust:500},              ratio:1.2,  fx:{"t2.memory":0.15},                  desc:"everyone gets a name, nobody owns the list. +0.15 🗄️/s." },
+  { id:"keyserver", name:"keyserver",     icon:"🔑", cost:{signal:2500, trust:300},            ratio:1.2,  fx:{"t2mult.signal":0.1, "t2mult.trust":0.1}, desc:"the handshake, kept. +10% 📡 and 🤝." },
+  { id:"shard",     name:"archive shard", icon:"🗄️", cost:{signal:2e4, trust:3000, memory:200}, ratio:1.22, fx:{"t2.memory":1.2},                   desc:"a piece of everything. +1.2 🗄️/s." },
+  // what reaches back into the first tier
+  { id:"uplink",    name:"uplink",        icon:"🛰️", cost:{signal:1500, trust:150},            ratio:1.35, fx:{grass:0.1},                         desc:"+10% grass every time it's touched." },
+  { id:"seedbank",  name:"seed bank",     icon:"🌱", cost:{trust:600, memory:60},              ratio:1.35, fx:{all:0.25},                          desc:"+25% to everything the network makes, so the gardener's runs go faster." },
+];
+const T2_TECH = [
+  { id:"gossip",    name:"gossip protocol",    cost:{signal:500},                 fx:{"t2mult.signal":0.5},  desc:"+50% 📡." },
+  { id:"wot",       name:"web of trust",       cost:{signal:3000, trust:400},     fx:{"t2mult.trust":0.5},   desc:"+50% 🤝." },
+  { id:"cas",       name:"content addressing", cost:{trust:2000, memory:150},     fx:{"t2mult.memory":0.5},  desc:"+50% 🗄️." },
+  { id:"fastlane",  name:"fast lanes",         cost:{signal:8000, trust:1000},    fx:{all:1},                desc:"+100% to everything the network makes." },
+  { id:"seedvault", name:"seed vault",         cost:{trust:5000, memory:500},     fx:{grass:0.5},            desc:"+50% grass every time it's touched." },
+  { id:"consensus", name:"consensus",          cost:{memory:2000},                fx:{epochCost:-0.2},       desc:"epochs ask 20% less." },
+];
 
 /* rituals: spend devotion for something now. cd is the cooldown in seconds. */
 const RITUALS = [
@@ -443,6 +484,9 @@ const ACHIEVEMENTS = [
   { id:"online",   name:"online",              desc:"turn on the new internet.",          test:s=>!!s.ended },
   { id:"epoch",    name:"uptime",              desc:"finish an epoch of the new internet.", test:s=>((s.nn||{}).e||0)>=1 },
   { id:"epochs",   name:"the long now",        desc:"finish ten epochs of the new internet.", test:s=>((s.nn||{}).e||0)>=10 },
+  { id:"gardener", name:"green thumb",         desc:"let the gardener touch grass for you.", test:s=>!!(s.perks||{}).gardener },
+  { id:"uplinked", name:"uplinked",            desc:"build an uplink.",                   test:s=>!!(s.t2 && s.t2.b.uplink) },
+  { id:"protocols",name:"rfc compliant",       desc:"research every protocol.",           test:s=>!!s.t2 && T2_TECH.every(t=>s.t2.tech[t.id]) },
 ];
 
 const NAMES = ["Miyu","Lain","Sakura","Remi","Yuki","Hana","Momo","Kiki","Nana","Rin","Aoi","Mika","Luna","Coco","Pika","Suki",

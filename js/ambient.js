@@ -458,6 +458,7 @@ const AMBIENT = (()=>{
     for(const t of did.t) add("📜", "researched", t, 1);
     for(const u of did.u) add("✨", "bought", u, 1);
     for(const b in did.b) add("🏗️", "built", b, did.b[b]);
+    for(const [icon, verb, name] of did.x||[]) add(icon, verb, name, 1);
   }
   function drawCards(stripTop, k){
     const now = performance.now(), LIFE = 7000, px = Math.round(12*k), h = px + 12, R0 = W - 18 - 10*k;

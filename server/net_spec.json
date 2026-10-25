@@ -21,7 +21,11 @@
   "automeme": 8,
   "autotech": 12,
   "autobuild": 15,
-  "autoup": 12
+  "autoup": 12,
+  "autorite": 10,
+  "autoraid": 10,
+  "autowonder": 12,
+  "gardener": 100
  },
  "challenges": [
   "logoff",
@@ -29,5 +33,13 @@
   "small",
   "frugal",
   "speed"
- ]
+ ],
+ "challenge_names": {
+  "logoff": "logged off",
+  "bear": "bear season",
+  "small": "small world",
+  "frugal": "no frills",
+  "speed": "speedrun"
+ },
+ "achievements": 45
 }
