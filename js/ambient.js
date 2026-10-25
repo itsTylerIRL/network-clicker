@@ -222,7 +222,8 @@ const AMBIENT = (()=>{
   /* the camera: the whole network for a while, then close on one crowd and someone in it, then back out */
   function camera(dt, t){
     const calmNow = S.settings.calm;
-    if(t > cam.until || calmNow){
+    if(chime){ cam.focus = null; cam.spot = null; cam.tx = W/2; cam.ty = H/2; cam.tz = 1; cam.until = t + 8; }
+    else if(t > cam.until || calmNow){
       if(cam.focus || calmNow || !crowds.length){ cam.focus = null; cam.spot = null; cam.tx = W/2; cam.ty = H/2; cam.tz = 1; cam.until = t + (calmNow ? 1 : 20 + Math.random()*10); }
       else {
         const choices = crowds.filter(c=>c.id!==cam.lastFocus && c.id!=="away"), c = pick(choices.length ? choices : crowds);
@@ -392,6 +393,7 @@ const AMBIENT = (()=>{
       if(spot) text(spot.m.name+(spot.m.kind==="remilio" ? ", a remilio," : "")+" is one of them", W/2, stripTop - 32*ui, { align:"center", px:Math.round(12*ui), col:"#ddd", glow:"rgba(0,0,0,.9)" });
       cx.globalAlpha = 1;
     }
+    if(chime) drawChime(dt, t);
     cx.setTransform(dpr, 0, 0, dpr, dpr*drift.x, dpr*drift.y);
 
     // the strip
@@ -477,6 +479,144 @@ const AMBIENT = (()=>{
     cx.globalAlpha = 1;
   }
 
+  /* ---------- the top of the hour: a grandfather clock ----------
+     It comes up over the network, plays the Westminster quarters, then strikes the hour, one toll at a time. Everyone
+     jumps at each toll, the idle wake up, and once it's done they all say what time it is. */
+  const WESTMINSTER = [[329.6, 415.3, 370.0, 246.9], [329.6, 370.0, 415.3, 329.6], [415.3, 329.6, 370.0, 246.9], [246.9, 370.0, 415.3, 329.6]]; // E G♯ F♯ B, the hour's four changes
+  const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+  let chime = null, chimedHour = "";
+  function chimeCheck(){
+    const d = new Date(), key = d.toDateString()+" "+d.getHours();
+    if(!chime && d.getMinutes()===0 && d.getSeconds() < 20 && chimedHour !== key){ chimedHour = key; startChime(d.getHours()); }
+  }
+  function startChime(h24){
+    const n = h24 % 12 || 12, notes = [];
+    let at = 2.2;
+    for(const change of WESTMINSTER){ change.forEach((f, i)=>{ notes.push({ at, f, toll:0 }); at += i===3 ? 1.7 : 0.75; }); at += 0.3; }
+    at += 1.4;
+    for(let i=1; i<=n; i++){ notes.push({ at, f:164.8, toll:i }); at += 2.5; }
+    chime = { t:0, n, notes, next:0, end:at + 7.5, struck:0, lastToll:-9, lastNote:-9, floats:[], rings:[], said:false };
+  }
+  /* a bell: a few inharmonic partials dying away, the low ones longest */
+  function bell(f, len, vol){
+    if(!S || S.settings.mute) return;
+    vol *= (S.settings.vol!=null ? S.settings.vol : 70)/70;
+    if(vol <= 0) return;
+    try{
+      AC = AC || new (window.AudioContext||window.webkitAudioContext)();
+      if(AC.state==="suspended") AC.resume();
+      const t = AC.currentTime, out = AC.createGain(); out.gain.value = vol; out.connect(AC.destination);
+      for(const [r, a] of [[0.5, 0.45], [1, 1], [1.19, 0.4], [1.56, 0.3], [2, 0.45], [2.51, 0.18], [3.01, 0.12]]){
+        const o = AC.createOscillator(), g = AC.createGain(), d = len/Math.sqrt(r);
+        o.type = "sine"; o.frequency.value = f*r;
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(a, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+        o.connect(g); g.connect(out); o.start(t); o.stop(t + d + 0.05);
+      }
+    }catch(e){}
+  }
+  function chimeStep(dt){
+    const c = chime; c.t += dt;
+    const calmNow = S.settings.calm, all = [...agents.values()];
+    while(c.next < c.notes.length && c.notes[c.next].at <= c.t){
+      const nt = c.notes[c.next++];
+      if(nt.toll){
+        bell(nt.f, 5.5, 0.11); c.struck = nt.toll; c.lastToll = c.t;
+        if(!calmNow){ for(const a of all) if(!a.trip) a.hop = 1; c.rings.push({ r:0, a:1 }); }
+        if(nt.toll===1) for(const a of all) if(a.crowd==="idle" && Math.random() < 0.6) a.say = { txt:pick(["huh?", "!", "wha"]), life:2.2 };
+        else if(Math.random() < 0.7){ const a = pick(all); if(a && !a.say) a.say = { txt:pick(["dong", "DONG", "🔔"]), life:1.6 }; }
+      } else {
+        bell(nt.f*2, 2.2, 0.05); c.lastNote = c.t;
+        c.floats.push({ x:(Math.random() - 0.5)*0.6, y:0, life:2.4, txt:pick(["♪", "♫", "♩"]) });
+        if(!calmNow) for(const a of all) if(!a.trip && Math.random() < 0.25) a.hop = 0.6;
+      }
+    }
+    // after the last toll, everyone says what time it is
+    if(!c.said && c.next >= c.notes.length && c.t > c.lastToll + 1.2){
+      c.said = true;
+      const hr = c.n+" o'clock";
+      for(const a of all) if(Math.random() < 0.45) a.say = { txt:pick([hr, hr, cult(), cult(), "1000 year forever", "🔔", "don't worry about it"]), life:2.4 + Math.random()*1.6 };
+    }
+    if(c.t > c.end) chime = null;
+  }
+  /* the clock itself, h pixels tall, standing with its foot at (x, foot) */
+  function drawClock(x, foot, h, t, al){
+    const u = h/100, top = foot - h, c = chime, ph = R.phase;
+    const wood = cx.createLinearGradient(x - 18*u, 0, x + 18*u, 0);
+    wood.addColorStop(0, "#2a160c"); wood.addColorStop(0.45, "#6b3f22"); wood.addColorStop(0.55, "#7a4a28"); wood.addColorStop(1, "#24130a");
+    const gold = "#d9b45a", Y = v => top + v*u, box = (x0, y0, w, hh, r) => { cx.beginPath(); cx.roundRect(x - w/2*u + x0*u, Y(y0), w*u, hh*u, (r||0)*u); };
+    cx.save(); cx.globalAlpha = al;
+    // a glow in the market's color behind it, brighter on each toll
+    const since = c ? c.t - c.lastToll : 9, flash = Math.max(0, 1 - since/1.2);
+    cx.shadowColor = ph.color; cx.shadowBlur = (24 + flash*40)*Math.min(1, u);
+    cx.fillStyle = wood;
+    box(0, 82, 34, 18, 1.5); cx.fill();                       // the base
+    box(0, 96, 38, 4, 1); cx.fill();                           // its plinth
+    box(0, 42, 26, 41, 0); cx.fill();                          // the trunk
+    box(0, 39, 38, 4, 1); cx.fill();                           // the cornice under the hood
+    cx.beginPath(); cx.moveTo(x - 17*u, Y(40)); cx.lineTo(x - 17*u, Y(10)); cx.arc(x, Y(10), 17*u, Math.PI, 0); cx.lineTo(x + 17*u, Y(40)); cx.closePath(); cx.fill(); // the hood, arched
+    cx.shadowBlur = 0;
+    // gold: finials, trim, the columns either side of the face
+    cx.fillStyle = gold;
+    for(const fx of [-15, 0, 15]){ cx.beginPath(); cx.arc(x + fx*u, Y(fx ? 6 : -9), 1.8*u, 0, 7); cx.fill(); }
+    cx.fillRect(x - 15*u, Y(12), 1.4*u, 27*u); cx.fillRect(x + 13.6*u, Y(12), 1.4*u, 27*u);
+    cx.fillRect(x - 19*u, Y(39), 38*u, 0.8*u); cx.fillRect(x - 17*u, Y(82), 34*u, 0.8*u);
+    // the window in the trunk, and the pendulum and weights behind it
+    box(0, 46, 17, 33, 8.5); cx.fillStyle = "rgba(8,6,10,0.92)"; cx.fill(); cx.strokeStyle = gold; cx.lineWidth = 0.6*u; cx.stroke();
+    cx.save(); box(0, 46, 17, 33, 8.5); cx.clip();
+    for(const wx of [-4.5, 4.5]){ cx.strokeStyle = "rgba(217,180,90,.5)"; cx.lineWidth = 0.3*u; cx.beginPath(); cx.moveTo(x + wx*u, Y(42)); cx.lineTo(x + wx*u, Y(52)); cx.stroke();
+      const wg = cx.createLinearGradient(x + (wx - 1.6)*u, 0, x + (wx + 1.6)*u, 0); wg.addColorStop(0, "#8a6a2a"); wg.addColorStop(0.5, "#f0d488"); wg.addColorStop(1, "#7a5a20");
+      cx.fillStyle = wg; cx.fillRect(x + (wx - 1.6)*u, Y(52), 3.2*u, 8*u); }
+    const sw = Math.sin(t*Math.PI)*0.17, px = x, py = Y(42), L = 28*u;
+    const bx = px + Math.sin(sw)*L, by = py + Math.cos(sw)*L;
+    cx.strokeStyle = gold; cx.lineWidth = 0.6*u; cx.beginPath(); cx.moveTo(px, py); cx.lineTo(bx, by); cx.stroke();
+    const bg = cx.createRadialGradient(bx - 1.5*u, by - 1.5*u, 0, bx, by, 5*u); bg.addColorStop(0, "#fff3c4"); bg.addColorStop(0.5, gold); bg.addColorStop(1, "#7a5a20");
+    cx.fillStyle = bg; cx.beginPath(); cx.arc(bx, by, 5*u, 0, 7); cx.fill();
+    cx.restore();
+    // the face
+    const fy = Y(24), fr = 12.5*u;
+    cx.fillStyle = gold; cx.beginPath(); cx.arc(x, fy, fr + 1.2*u, 0, 7); cx.fill();
+    cx.fillStyle = flash > 0 ? "rgb("+[243, 234, 210].map(v=>Math.round(v + (255 - v)*flash)).join(",")+")" : "#f3ead2";
+    cx.beginPath(); cx.arc(x, fy, fr, 0, 7); cx.fill();
+    cx.fillStyle = "#2a1a10"; cx.font = "bold "+Math.max(6, 2.5*u)+"px Georgia,serif"; cx.textAlign = "center"; cx.textBaseline = "middle";
+    for(let i=1; i<=12; i++){ const a = i/12*Math.PI*2 - Math.PI/2; cx.fillText(ROMAN[i], x + Math.cos(a)*fr*0.78, fy + Math.sin(a)*fr*0.78); }
+    for(let i=0; i<60; i++){ const a = i/60*Math.PI*2; cx.fillRect(x + Math.cos(a)*fr*0.93 - 0.2*u, fy + Math.sin(a)*fr*0.93 - 0.2*u, 0.4*u, 0.4*u); }
+    const now = new Date(), mA = (now.getMinutes() + now.getSeconds()/60)/60*Math.PI*2 - Math.PI/2, hA = ((now.getHours() % 12) + now.getMinutes()/60)/12*Math.PI*2 - Math.PI/2;
+    cx.strokeStyle = "#1a0f08"; cx.lineCap = "round";
+    cx.lineWidth = 1.1*u; cx.beginPath(); cx.moveTo(x, fy); cx.lineTo(x + Math.cos(hA)*fr*0.5, fy + Math.sin(hA)*fr*0.5); cx.stroke();
+    cx.lineWidth = 0.7*u; cx.beginPath(); cx.moveTo(x, fy); cx.lineTo(x + Math.cos(mA)*fr*0.78, fy + Math.sin(mA)*fr*0.78); cx.stroke();
+    cx.fillStyle = gold; cx.beginPath(); cx.arc(x, fy, 0.9*u, 0, 7); cx.fill();
+    cx.lineCap = "butt";
+    cx.restore();
+    return { fx:x, fy, fr };
+  }
+  function drawChime(dt, t){
+    const c = chime, stripTop = Math.min(...Object.values(bars).map(b=>b.y), H - 20), topY = 112*ui + 14;
+    const al = Math.min(1, c.t/1.8, (c.end - c.t)/2.5);
+    // the network dims behind it
+    cx.fillStyle = "rgba(0,0,0,"+(0.55*al)+")"; cx.fillRect(0, 0, W, H);
+    const h = Math.min((stripTop - topY)*0.92, W*1.1), foot = topY + (stripTop - topY + h)/2 - 4 + (1 - al)*30;
+    const f = drawClock(W/2, foot, h, c.t, al), u = h/100;
+    // each toll rings out from the face
+    c.rings = c.rings.filter(r=>{ r.r += dt*h*0.45; r.a -= dt*0.6; if(r.a <= 0) return false;
+      cx.strokeStyle = "rgba(255,240,200,"+(r.a*al)+")"; cx.lineWidth = 2; cx.beginPath(); cx.arc(f.fx, f.fy, f.fr + r.r, 0, 7); cx.stroke(); return true; });
+    // the quarters drift up out of it as notes
+    c.floats = c.floats.filter(n=>{ n.life -= dt; n.y -= dt*40; if(n.life <= 0) return false;
+      text(n.txt, f.fx + n.x*h*0.5 + Math.sin(n.life*3)*6, f.fy - f.fr - 6 + n.y, { px:Math.round(Math.max(14, 7*u)), align:"center", col:"rgba(255,240,200,"+Math.min(1, n.life)*al+")" }); return true; });
+    // the count, beside it, struck large and settling
+    // in the room right of the clock, as big as fits (a phone has a sliver)
+    const edge = W/2 + 19*u, room = Math.min(W - edge - 10, 40*u + 80), side = edge + room/2 - W/2;
+    cx.font = "bold 100px "+FONT; const big = Math.round(Math.max(18, Math.min(16*u, 120, room/(cx.measureText(ROMAN[c.struck] || "I").width/100))));
+    if(c.struck){
+      const since = c.t - c.lastToll, pop = 1 + Math.max(0, 1 - since*3)*0.25;
+      cx.save(); cx.translate(W/2 + side, f.fy); cx.scale(pop, pop);
+      text(ROMAN[c.struck], 0, 0, { px:big, align:"center", base:"middle", col:"rgba(255,240,200,"+al+")", glow:R.phase.color });
+      cx.restore();
+      text(c.struck+" of "+c.n, W/2 + side, f.fy + big*0.7, { px:Math.round(Math.max(11, big*0.18)), align:"center", base:"middle", col:"rgba(200,200,200,"+al*0.8+")" });
+    }
+    const words = c.said ? c.n+" o'clock · "+cult() : c.struck ? "the hour" : "♪ the quarters";
+    text(words, W/2, Math.min(stripTop - 34*ui, foot + 22*ui), { px:Math.round(15*ui + 2), align:"center", col:"rgba(255,240,200,"+al+")", glow:"rgba(0,0,0,.9)" });
+  }
+
   /* ---------- the loop ---------- */
   let layoutT = 0, spentT = 0;
   function loop(now){
@@ -488,6 +628,8 @@ const AMBIENT = (()=>{
     clock = t;
     layoutT -= dt; if(layoutT <= 0){ layoutT = 1; layout(); place(); }
     spentT -= dt; if(spentT <= 0){ spentT = 0.5; spent(); }
+    if(frameN % 30===0) chimeCheck();
+    if(chime) chimeStep(dt);
     spawn(dt);
     draw(dt, t);
   }
@@ -505,7 +647,7 @@ const AMBIENT = (()=>{
 
   function start(){
     if(on || !S || !S.started) return;
-    on = true; cards = []; moved = 0; parts = []; rings = []; agents = new Map(); seenIds = null; lastRes = {}; spawnAcc = {}; tripAcc = 0; sayAcc = 0;
+    on = true; cards = []; chime = null; moved = 0; parts = []; rings = []; agents = new Map(); seenIds = null; lastRes = {}; spawnAcc = {}; tripAcc = 0; sayAcc = 0;
     cam.x = cam.tx = innerWidth/2; cam.y = cam.ty = innerHeight/2; cam.z = cam.tz = 1; cam.until = 12; cam.focus = cam.spot = null;
     cv = document.createElement("canvas"); cv.id = "ambient"; document.body.appendChild(cv);
     cx = cv.getContext("2d"); size();
@@ -531,5 +673,5 @@ const AMBIENT = (()=>{
   // the wake lock lets go when the tab is hidden; take it again on the way back
   function wake(){ if(navigator.wakeLock && !lock) navigator.wakeLock.request("screen").then(l=>{ lock = l; l.addEventListener("release", ()=>{ lock = null; }); }).catch(()=>{}); }
   document.addEventListener("visibilitychange", ()=>{ if(on && !document.hidden) wake(); });
-  return { start, stop, bot, get on(){ return on; } };
+  return { start, stop, bot, chime:h=>{ if(on) startChime(h==null ? new Date().getHours() : h); }, get on(){ return on; } };
 })();
