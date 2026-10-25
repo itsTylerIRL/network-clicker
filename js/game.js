@@ -116,6 +116,8 @@ function migrate(s){ // fill in anything a newer version added
   s.settings.notify = Object.assign({}, base.settings.notify, s.settings.notify);
   s.run.auto = Object.assign({}, base.run.auto, s.run.auto);
   s.auto.rites = Object.assign({}, base.auto.rites, s.auto.rites);
+  const stacked = s.buffs || []; s.buffs = []; // buffs that stacked up before they added up: one a kind, their time together
+  for(const b of stacked) if(b.until > (s.t||0)) addBuff(s, Object.assign({}, b));
   if(s.t2){ for(const r of T2_RES) s.t2.res[r.id] = s.t2.res[r.id] || 0; s.t2.cheeseLv = s.t2.cheeseLv || 0; s.t2.beetles = s.t2.beetles || 0; // newer second-tier things
     if(!s.t2.cheeseWeek) s.t2.cheeseWeek = cheeseWeek(); } // a level from before weeks counted is this week's
   return deviceSettings(s);
@@ -158,6 +160,12 @@ function sumFx(s){
   return f;
 }
 const buff = (s, key) => s.buffs.reduce((a,b)=>a + (b[key]||0), 0);
+/* a buff of a kind that's already running adds its time to that one, instead of stacking up beside it: one card a
+   kind, its effect at the usual strength for all the time together */
+function addBuff(s, b){
+  const on = s.buffs.find(x=>x.kind===b.kind && x.until > s.t);
+  if(on) on.until += b.until - s.t; else s.buffs.push(b);
+}
 function phase(s){ return rule(s, "bear") ? PHASES[3] : PHASES[Math.floor(s.phaseT/PHASE_SECS) % PHASES.length]; }
 
 /* a crowd gets crabby: nothing up to ten, then less and less for each one more (-53% at 100, -75% at 200, -98% at 400) */
@@ -420,7 +428,7 @@ function liveEvents(s, dt, R){
   if(s.timers.drama <= 0){
     s.timers.drama = 150 + rnd()*120;
     if(s.miladys.length >= 8 && rnd() < 0.35*Math.max(0, 1 - R.jobs.mod*0.1)){
-      s.buffs.push({ kind:"drama", happy:-0.15, until:s.t+90 });
+      addBuff(s, { kind:"drama", happy:-0.15, until:s.t+90 });
       log("💢 drama in the group chat. -15% happiness for 90s."+(s.tech.moderation ? " mods would help." : ""), "bad"); react("drama"); cue("drama");
     }
   }
@@ -948,9 +956,9 @@ function doRitual(s, R, id){
   s.cd[id] = s.t + r.cd * Math.max(0.2, 1 + (R.f.ritualCd||0));
   s.stats.rituals = (s.stats.rituals||0) + 1;
   let msg = r.desc;
-  if(id==="prayer") s.buffs.push({ kind:"prayer", happy:0.3, until:s.t+120 });
-  else if(id==="hyperpost") s.buffs.push({ kind:"hyperpost", click:9, until:s.t+30 });
-  else if(id==="vigil") s.buffs.push({ kind:"vigil", all:0.5, until:s.t+120 });
+  if(id==="prayer") addBuff(s, { kind:"prayer", happy:0.3, until:s.t+120 });
+  else if(id==="hyperpost") addBuff(s, { kind:"hyperpost", click:9, until:s.t+30 });
+  else if(id==="vigil") addBuff(s, { kind:"vigil", all:0.5, until:s.t+120 });
   else if(id==="airdrop") msg = "airdrop: "+(windfall(120, s, R).join(" ") || "nothing fit. build more storage.");
   else if(id==="meetup"){
     let k = 0; while(k < 10 && s.miladys.length < R.housing){ newMilady(s, R); k++; }
@@ -1069,9 +1077,9 @@ function catchSparkle(){
   if(roll < 0.25 && room){
     const m = newMilady(S, R); msg = "a stranger followed the sparkle in. <b>"+m.name+"</b> joined.";
   } else if(roll < 0.5){
-    S.buffs.push({ kind:"frenzy", click:6, until:S.t+30 }); msg = "posting frenzy: posts make 7× for 30s."; cue("frenzy");
+    addBuff(S, { kind:"frenzy", click:6, until:S.t+30 }); msg = "posting frenzy: posts make 7× for 30s."; cue("frenzy");
   } else if(roll < 0.65){
-    S.buffs.push({ kind:"glow", happy:0.25, until:S.t+60 }); msg = "a glow comes over the network: +25% happiness for 60s."; cue("glow");
+    addBuff(S, { kind:"glow", happy:0.25, until:S.t+60 }); msg = "a glow comes over the network: +25% happiness for 60s."; cue("glow");
   } else msg = "windfall: "+(windfall(90).join(" ") || "nothing fit. build more storage.");
   log("💎 "+msg); toast("💎 "+msg);
   update();
