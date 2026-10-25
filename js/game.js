@@ -2930,27 +2930,37 @@ function showEnding(){
   if($("ending")) return;
   S.endSeen = true; save(); syncName();
   closeModal(); FX.ending(true); sfx.shiny();
-  const n = netName(), runs = resets(S)+1, met = S.nextId-1;
-  const lines = [
-    "you started alone, posting.",
-    "then someone else was there.",
-    "then a group chat. then a scene. then a movement.",
-    "you touched grass "+resets(S)+" time"+(resets(S)===1 ? "" : "s")+", and came back every time.",
-    "the old internet was a place you went.",
-    "this one is a place you are.",
-    "no center. no owner. nobody can log it off.",
-    esc(n)+" isn't growing any more.",
-    "it's grown.",
+  const runs = resets(S)+1, met = S.nextId-1;
+  // I Long for Network Spirituality (Remilia): stanzas in one place on the screen, a line at a time, each clearing
+  // for the next; the last stays. [lines, seconds a line, the stanza's class]
+  const STANZAS = [
+    [["We are an embodiment –", "We're God's little warriors, We're network kommandos.", "We're whitepilled.", "We're lawyered up, in the court of clout."], 2.1],
+    [["Nothing we can do can be cringe,", "except when it is and then we don't care, we don't care."], 2.3],
+    [["We're live laugh lovers, and we put all our points into karma, charm and beauty.", "We're cDJs, we're fashion models, we're microdosers, and supplement freaks."], 2.8],
+    [["We're lindy, we're Wired, we're Not in Employment Education or Training.", "We're viral cryptoxillionaires.", "We don't have to try.", "We're the new art."], 2.1],
+    [["And so we self-organized into Remilia."], 3.2, "big"],
+    [["Remilia is an institution.", "Remilia is a self-organization.", "Remilia is a lifestyle brand.", "Remilia is a master-planned community.",
+      "Remilia is an investment fund.", "Remilia is an artist's colony.", "Remilia is a crowdfunded video game.", "Remilia is an autonomous smart contract.",
+      "Remilia is an independent record label.", "Remilia is a community center for the digital village.", "Remilia is a manifesto."], 1.15, "list"],
+    [["Remilia will save the internet."], 3.4, "big last"],
   ];
+  let t = 2.2, stage = "";
+  STANZAS.forEach(([ls, each, cls], k)=>{
+    const last = k===STANZAS.length-1, lines = ls.map(l=>{ const p = '<p style="--d:'+t.toFixed(2)+'s">'+esc(l)+'</p>'; t += each; return p; }).join("");
+    t += 1.2; // a moment with the stanza whole before it clears
+    stage += '<div class="stz '+(cls||"")+'"'+(last ? "" : ' style="--o:'+t.toFixed(2)+'s"')+'>'+lines+'</div>';
+    if(!last) t += 0.9;
+  });
+  const T = t + 0.4;
   const ov = el("div", "ending");
   ov.id = "ending";
-  ov.innerHTML = '<div class="end-in">'+lines.map((l,i)=>'<p style="--d:'+(0.6+i*2.1)+'s">'+l+'</p>').join("")+
-    '<h1 style="--d:'+(0.6+lines.length*2.1+0.6)+'s">the new internet is online<span class="cursor">_</span></h1>'+
-    (online() && acct() ? '<div class="end-who" style="--d:'+(0.6+lines.length*2.1+1.6)+'s">'+whoTag(acct().handle)+'</div>' : "")+
-    '<div class="end-stats" style="--d:'+(0.6+lines.length*2.1+2.2)+'s">'+
+  ov.innerHTML = '<div class="end-in"><div class="end-title" style="--d:0.4s">I Long for Network Spirituality</div><div class="end-stage">'+stage+'</div>'+
+    '<h1 style="--d:'+T+'s">the new internet is online<span class="cursor">_</span></h1>'+
+    (online() && acct() ? '<div class="end-who" style="--d:'+(T+1)+'s">'+whoTag(acct().handle)+'</div>' : "")+
+    '<div class="end-stats" style="--d:'+(T+1.6)+'s">'+
       [["day", dayCount()], ["runs", runs], ["market cycles", fmt(S.stats.cycles)], ["posts", fmt(S.stats.clicks)], ["miladys met", fmt(met)], ["relics", Object.keys(S.relics).length+" / "+RELICS.length], ["played", fmtTime(S.stats.played)]]
         .map(([k,v])=>'<div><span>'+k+'</span><b>'+v+'</b></div>').join("")+'</div>'+
-    '<div class="end-credits" style="--d:'+(0.6+lines.length*2.1+3.4)+'s"><p>made by <a href="https://tylerirl.com/" target="_blank" rel="noopener">tyler (in real life)</a> · trait art: remilia corporation, copyleft · not affiliated</p>'+
+    '<div class="end-credits" style="--d:'+(T+2.8)+'s"><p>made by <a href="https://tylerirl.com/" target="_blank" rel="noopener">tyler (in real life)</a> · words from <i>I Long for Network Spirituality</i>, remilia · trait art: remilia corporation, copyleft · not affiliated</p>'+
       '<p>the network was always going to be infinite. thank you for growing it.</p>'+
       '<div class="row"><button class="btn big" id="end-stay">keep posting</button><button class="btn small" id="end-share">share it 📸</button><a class="btn small" href="https://cancel.tylerirl.com/">play the cancel is coming ↗</a></div></div>'+
     '<button class="btn small end-skip" id="end-skip">skip</button></div>';

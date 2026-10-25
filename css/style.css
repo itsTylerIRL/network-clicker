@@ -676,6 +676,16 @@ body.the-end .screen,body.the-end #post-fab{opacity:0;transition:opacity 2s;poin
 .end-in>*{opacity:0;animation:endline 1.6s ease forwards;animation-delay:var(--d);}
 .ending.skip .end-in>*{animation-delay:0s!important;animation-duration:.4s;}
 .end-in p{font-size:clamp(15px,2.2vw,20px);color:#ddd;margin:0 0 12px;text-shadow:0 0 12px #000;}
+/* the manifesto: stanzas in one place, a line at a time, each clearing for the next (--o); the last one stays */
+.end-title{font-family:var(--label);text-transform:uppercase;letter-spacing:.3em;font-size:11px;color:var(--neon);margin:4vh 0 3vh;opacity:.8;}
+.end-stage{display:grid;align-items:center;min-height:min(46vh,420px);}
+.stz{grid-area:1/1;animation:stzout .9s ease forwards;animation-delay:var(--o,9999s);}
+.stz p{opacity:0;animation:endline 1.6s ease forwards;animation-delay:var(--d);}
+.stz.big p{font-size:clamp(22px,3.6vw,34px);color:#fff;letter-spacing:.02em;}
+.stz.list p{margin:0 0 6px;font-size:clamp(14px,1.9vw,18px);}
+.stz.last p{color:var(--neon);text-shadow:0 0 26px rgba(139,233,253,.8),0 0 4px #000;}
+.ending.skip .stz:not(.last),.ending.skip .stz p{animation-delay:0s!important;animation-duration:.4s;} /* skipping: straight to the last stanza and the end */
+@keyframes stzout{to{opacity:0;visibility:hidden;}}
 .end-in h1{font-size:clamp(26px,5vw,48px);color:var(--neon);text-transform:lowercase;letter-spacing:.06em;margin:26px 0;text-shadow:0 0 30px rgba(139,233,253,.7),0 0 4px #000;}
 .end-in .cursor{animation:endblink 1s steps(1) infinite;}
 .end-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin:0 auto 22px;max-width:560px;}
