@@ -13,7 +13,7 @@ const AMBIENT = (()=>{
   const SHOW_MAX = 36;        // drawn per crowd; the rest are a "+n"
   const FONT = "'Share Tech Mono','JetBrains Mono',monospace";
   let on = false, cv = null, cx = null, W = 0, H = 0, dpr = 1, raf = 0, last = 0, t0 = 0, frameN = 0, moved = 0, lock = null;
-  let parts = [], rings = [], agents = new Map(), crowds = [], bars = {}, lastRes = {}, ticker = { text:"", at:0 }, seenIds = null;
+  let parts = [], rings = [], agents = new Map(), crowds = [], bars = {}, lastRes = {}, ticker = { text:"", at:0 }, seenIds = null, cards = [];
 
   /* ---------- a whole milady, small, from her layers (no background) ---------- */
   const sprites = new Map(); // look key -> canvas (or "busy")
@@ -438,8 +438,43 @@ const AMBIENT = (()=>{
       text(ticker.text.length > max ? ticker.text.slice(0, max - 1)+"…" : ticker.text, W/2, stripTop - 12, { px:px(12), align:"center", col:"#ddd" });
       cx.globalAlpha = 1;
     }
+    drawCards(stripTop, k);
     text("any key or click to come back", W/2, H - 5, { px:9, align:"center", col:"rgba(255,255,255,0.25)" });
     cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  /* ---------- the robots' shopping, as cards stacking up by the strip ---------- */
+  /* the same thing bought again soon after counts up on its card (built 3× server rack) instead of a new one */
+  function bot(did){
+    const add = (icon, verb, name, n) => {
+      const now = performance.now(), c = cards.find(c=>c.verb===verb && c.name===name && now - c.at < 6000);
+      if(c){ c.n += n; c.at = now; c.bump = 1; return; }
+      cards.unshift({ icon, verb, name, n, at:now, born:now, bump:1 });
+      if(cards.length > 12) cards.length = 12;
+    };
+    if(did.m) add("🐸", "made", "memes", did.m);
+    for(const t of did.t) add("📜", "researched", t, 1);
+    for(const u of did.u) add("✨", "bought", u, 1);
+    for(const b in did.b) add("🏗️", "built", b, did.b[b]);
+  }
+  function drawCards(stripTop, k){
+    const now = performance.now(), LIFE = 7000, px = Math.round(12*k), h = px + 12, R0 = W - 18 - 10*k;
+    cards = cards.filter(c=>now - c.at < LIFE);
+    let y = stripTop - 34*k - h;
+    for(const c of cards.slice(0, 5)){
+      const age = now - c.at, inT = Math.min(1, (now - c.born)/350), a = Math.min(1, (LIFE - age)/900)*inT;
+      c.bump = Math.max(0, c.bump - 0.06);
+      const label = "🤖 "+c.icon+" "+c.verb+" "+(c.verb==="made" ? fmt(c.n)+" " : c.n > 1 ? c.n+"× " : "")+c.name;
+      cx.font = px+"px "+FONT;
+      const tw = cx.measureText(label).width + 20, x = R0 - tw + (1 - inT)*40;
+      cx.globalAlpha = a;
+      cx.fillStyle = "rgba(10,12,18,0.82)"; cx.strokeStyle = "rgba(139,233,253,"+(0.3 + c.bump*0.6)+")"; cx.lineWidth = 1;
+      cx.beginPath(); cx.roundRect(x, y, tw, h, 7); cx.fill(); cx.stroke();
+      text(label, x + 10, y + h/2 + 1, { px, base:"middle", col:"#e8f6ff" });
+      y -= h + 6;
+      if(y < 112*k + 14) break;
+    }
+    cx.globalAlpha = 1;
   }
 
   /* ---------- the loop ---------- */
@@ -470,7 +505,7 @@ const AMBIENT = (()=>{
 
   function start(){
     if(on || !S || !S.started) return;
-    on = true; moved = 0; parts = []; rings = []; agents = new Map(); seenIds = null; lastRes = {}; spawnAcc = {}; tripAcc = 0; sayAcc = 0;
+    on = true; cards = []; moved = 0; parts = []; rings = []; agents = new Map(); seenIds = null; lastRes = {}; spawnAcc = {}; tripAcc = 0; sayAcc = 0;
     cam.x = cam.tx = innerWidth/2; cam.y = cam.ty = innerHeight/2; cam.z = cam.tz = 1; cam.until = 12; cam.focus = cam.spot = null;
     cv = document.createElement("canvas"); cv.id = "ambient"; document.body.appendChild(cv);
     cx = cv.getContext("2d"); size();
@@ -496,5 +531,5 @@ const AMBIENT = (()=>{
   // the wake lock lets go when the tab is hidden; take it again on the way back
   function wake(){ if(navigator.wakeLock && !lock) navigator.wakeLock.request("screen").then(l=>{ lock = l; l.addEventListener("release", ()=>{ lock = null; }); }).catch(()=>{}); }
   document.addEventListener("visibilitychange", ()=>{ if(on && !document.hidden) wake(); });
-  return { start, stop, get on(){ return on; } };
+  return { start, stop, bot, get on(){ return on; } };
 })();

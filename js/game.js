@@ -282,25 +282,26 @@ function automate(s, R, dt, live){
   const spare = c => Object.keys(c).every(k=>s.res[k] - c[k] >= a.keep*R.cap[k] - 1e-9); // leaves the reserve alone
   const room = c => Math.max(...Object.keys(c).map(k=>c[k]/R.cap[k])); // how much of your storage it takes
   const cheapest = list => list.sort((x, y)=>room(x.c) - room(y.c))[0];
-  const ct = s.run.auto;
+  const ct = s.run.auto, did = { m:0, t:[], u:[], b:{} }; // what this go bought, for ambient mode's cards
   for(let i=0; i<n; i++){
     if(p.automeme && a.meme && s.res.vibes >= R.cap.vibes*0.9){
       const m = Math.min(Math.floor((s.res.vibes - R.cap.vibes*0.6)/MEME_COST), Math.floor(R.cap.memes - s.res.memes));
-      if(m > 0){ s.res.vibes -= m*MEME_COST; gain(s, "memes", m, R.cap.memes); ct.m += m; }
+      if(m > 0){ s.res.vibes -= m*MEME_COST; gain(s, "memes", m, R.cap.memes); ct.m += m; did.m += m; }
     }
     if(p.autotech && a.tech){
       const t = cheapest(TECHS.filter(t=>!s.tech[t.id] && techShownIn(s, t)).map(t=>({ x:t, c:techPrice(t, s, R.f) })).filter(o=>canPay(s, o.c)));
-      if(t){ pay(s, t.c); s.tech[t.x.id] = true; ct.t++; if(live){ log("🤖 researched <b>"+t.x.name+"</b>. "+t.x.desc); FX.research(); } }
+      if(t){ pay(s, t.c); s.tech[t.x.id] = true; ct.t++; did.t.push(t.x.name); if(live){ log("🤖 researched <b>"+t.x.name+"</b>. "+t.x.desc); FX.research(); } }
     }
     if(p.autoup && a.up && !rule(s, "frugal")){
       const u = cheapest(UPGRADES.filter(u=>!s.up[u.id] && shownIn(s, u) && canPay(s, u.cost)).map(u=>({ x:u, c:u.cost })));
-      if(u){ pay(s, u.c); s.up[u.x.id] = true; ct.u++; if(live) log("🤖 bought <b>"+u.x.name+"</b>: "+u.x.desc); }
+      if(u){ pay(s, u.c); s.up[u.x.id] = true; ct.u++; did.u.push(u.x.name); if(live) log("🤖 bought <b>"+u.x.name+"</b>: "+u.x.desc); }
     }
     if(p.autobuild && a.build){
       const b = cheapest(BUILDINGS.filter(b=>shownIn(s, b) && !a.skip[b.id]).map(b=>({ x:b, c:priceOf(b, s) })).filter(o=>canPay(s, o.c) && spare(o.c)));
-      if(b){ pay(s, b.c); s.b[b.x.id]++; ct.b++; if(live && s.b[b.x.id]===1) log("🤖 built your first <b>"+b.x.name+"</b>."); }
+      if(b){ pay(s, b.c); s.b[b.x.id]++; ct.b++; did.b[b.x.name] = (did.b[b.x.name]||0) + 1; if(live && s.b[b.x.id]===1) log("🤖 built your first <b>"+b.x.name+"</b>."); }
     }
   }
+  if(live && typeof AMBIENT!=="undefined" && AMBIENT.on) AMBIENT.bot(did);
 }
 
 /* ---------- graphs: what you held, through the run ---------- */
