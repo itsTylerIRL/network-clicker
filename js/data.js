@@ -366,11 +366,14 @@ const T2_TECH = [
 /* CHEESEWORLD: cheese given away, a level at a time, each half again the last. No last level, but it's a week's
    worth: the levels start again when the cancel's week does (as Sunday night ends, Eastern), so nobody's ahead for
    good, and the week's levels become beetles 🪲, kept forever as a count of every level ever given. The level shows on
-   your profile in the cancel is coming as a cheese patron badge, and outside the daily you start its runs with a
-   little more $CULT: ten times the square root of your level (+10, +20 at 4, +30 at 9). */
+   your profile in the cancel is coming as a cheese patron badge, and outside the daily you start its runs stronger:
+   +50 $CULT and +5 max HP for every square root of your level (+50 and +5, +100 and +10 at 4, +150 and +15 at 9). It
+   takes the whole network to get here, so it's worth it; the square root, and the week, keep it from running away. */
 const CHEESE_BASE = 100, CHEESE_GROW = 1.5;
 const cheeseCost = lv => Math.round(CHEESE_BASE*Math.pow(CHEESE_GROW, lv));
-const cheeseCult = lv => Math.round(10*Math.sqrt(lv));
+const cheeseCult = lv => Math.round(50*Math.sqrt(lv));
+const cheeseHp = lv => Math.round(5*Math.sqrt(lv));
+const cheeseBoost = lv => "+"+cheeseCult(lv)+" $CULT and +"+cheeseHp(lv)+" max HP";
 
 /* rituals: spend devotion for something now. cd is the cooldown in seconds. */
 const RITUALS = [

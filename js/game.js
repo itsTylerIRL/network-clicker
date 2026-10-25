@@ -837,7 +837,7 @@ function buildT2(body){
   // CHEESEWORLD: give cheese away, a level at a time; it shows over in the cancel is coming
   const cw = el("div", "cheese-box");
   cw.innerHTML = '<div class="nn-h"><b>🧀 CHEESEWORLD</b><span id="cw-lv"></span></div>'+
-    '<p class="note">give cheese away, a level at a time, each half again the last. your profile in <a href="https://cancel.tylerirl.com/" target="_blank" rel="noopener">the cancel is coming</a> wears it as a cheese patron badge, on the boards and everywhere your name is, and outside the daily you start its runs with a little more $CULT. the daily stays the same for everyone. the levels are a week\'s worth: when the cancel\'s week turns (Sunday night, Eastern) they become beetles 🪲, kept forever, and start again.</p>'+
+    '<p class="note">give cheese away, a level at a time, each half again the last. your profile in <a href="https://cancel.tylerirl.com/" target="_blank" rel="noopener">the cancel is coming</a> wears it as a cheese patron badge, on the boards and everywhere your name is, and outside the daily you start its runs with more $CULT and more max HP. the daily stays the same for everyone. the levels are a week\'s worth: when the cancel\'s week turns (Sunday night, Eastern) they become beetles 🪲, kept forever, and start again.</p>'+
     '<div class="nn-ctl"><button class="btn" id="cw-give"></button><span class="note" id="cw-next"></span></div>';
   body.appendChild(cw);
   cw.querySelector("#cw-give").onclick = c=>giveCheese(c.currentTarget);
@@ -870,7 +870,7 @@ function giveCheese(btn){
   if(S.t2.res.cheese < c - 1e-9) return sfx.no();
   S.t2.res.cheese -= c; S.t2.cheeseLv = lv + 1;
   sfx.shiny(); FX.buy(btn, true); react("love"); cue("stage");
-  log("🧀 you gave "+fmt(c)+" cheese to CHEESEWORLD: cheese patron, level <b>"+(lv+1)+"</b>. in the cancel is coming, that's +"+cheeseCult(lv+1)+" $CULT to start a run (not the daily).");
+  log("🧀 you gave "+fmt(c)+" cheese to CHEESEWORLD: cheese patron, level <b>"+(lv+1)+"</b>. in the cancel is coming, that's "+cheeseBoost(lv+1)+" to start a run (not the daily).");
   clearTimeout(syncSoon); syncSoon = setTimeout(()=>syncUp(), 1000); // so the cancel sees it soon
   refresh();
 }
@@ -888,11 +888,11 @@ function updateT2(body){
   });
   if($("cw-give")){
     const lv = S.t2.cheeseLv||0, c = cheeseCost(lv), have = S.t2.res.cheese;
-    $("cw-lv").textContent = (lv ? "this week: cheese patron, level "+lv+" · +"+cheeseCult(lv)+" $CULT to start a cancel run" : "nothing given this week")+
+    $("cw-lv").textContent = (lv ? "this week: cheese patron, level "+lv+" · "+cheeseBoost(lv)+" to start a cancel run" : "nothing given this week")+
       " · 🪲 "+(S.t2.beetles||0)+" beetle"+(S.t2.beetles===1 ? "" : "s")+" · starts again in "+fmtTime(cheeseResetIn());
     $("cw-give").innerHTML = "give "+fmt(c)+" 🧀"; $("cw-give").disabled = have < c - 1e-9;
     const rate = R.t2.cheese||0;
-    $("cw-next").textContent = have >= c ? "level "+(lv+1)+": +"+cheeseCult(lv+1)+" $CULT" : rate > 0 ? "⏳ "+fmtTime(Math.ceil((c - have)/rate)) : S.t2.b.cave ? "" : "build a cheese cave to make some";
+    $("cw-next").textContent = have >= c ? "level "+(lv+1)+": "+cheeseBoost(lv+1) : rate > 0 ? "⏳ "+fmtTime(Math.ceil((c - have)/rate)) : S.t2.b.cave ? "" : "build a cheese cave to make some";
   }
   body.querySelectorAll("[data-t2t]").forEach(c=>{
     const t = byId(T2_TECH, c.dataset.t2t);
