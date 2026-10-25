@@ -191,6 +191,8 @@ h1.game-title .is{color:var(--neon);text-shadow:0 0 18px rgba(139,233,253,.9);di
 #log .ln{padding:3px 0;border-bottom:1px dashed rgba(139,233,253,.08);}
 #log .ln:first-child{animation:fadein .3s;}
 #log .ln.bad{color:#ff9a9a;} #log .ln.dim{color:var(--dim);}
+#log .ln.cancel{color:#ffc2c7;border-left:2px solid rgba(255,85,85,.55);padding-left:8px;} /* a run from the cancel is coming */
+#log .ln.cancel b{color:#fff;} #log .ln.cancel a{color:#ff7b86;white-space:nowrap;} #log .ln.cancel a:hover{color:#fff;}
 #log b{color:#fff;}
 
 /* tabs */

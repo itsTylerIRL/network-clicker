@@ -61,6 +61,7 @@ function fresh(keep){
     grass:0, perks:{}, ach:{}, relics:{}, chDone:{}, challenge:null,
     cd:{}, raids:[], wonder:0, autoJob:"poster", seenNew:{}, history:[], born:Date.now(),
     garden:{ at:"best", min:10, runs:[], away:0 }, // the gardener: when it touches grass, its last few runs (for time away), and grass it brought in while you were
+    cancelSeen:0, // the newest run from the cancel is coming already in the feed (its time), so nothing comes in twice
     t2:null, // the second tier, once the gardener has it running: { res, b, tech, frozen (the grass bonus, locked in), e0 (the epoch it opened on) }
     who:{ kind:"milady", token:null, eye:"" }, // who you are: a milady or a remilio, rolled or a token by its number (S.you is the layers)
     stats:{ clicks:0, sparkles:0, resets:0, played:0, made:{}, rituals:0, raids:0, cancels:0, cycles:0 },
@@ -743,7 +744,7 @@ function doTouchGrass(into, bot){
     challenge:S.challenge, beaten:!!met, end:Date.now(), bot:bot ? 1 : undefined }).slice(-50);
   const garden = bot ? Object.assign({}, S.garden, { runs:S.garden.runs.concat({ t:S.runT, g }).slice(-5) }) : S.garden;
   const keep = { grass:S.grass+g, perks:S.perks, ach:S.ach, you:S.you, who:S.who, settings:S.settings, started:true, relics:S.relics, chDone:done,
-    challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, history, born:S.born, garden, t2:S.t2, log:S.log.slice(0, 40),
+    challenge:into||null, autoJob:S.autoJob, seenNew:S.seenNew, seenInit:true, history, born:S.born, garden, t2:S.t2, cancelSeen:S.cancelSeen, log:S.log.slice(0, 40),
     nn:S.nn, auto:S.auto, ended:S.ended, endSeen:S.endSeen, stats:Object.assign(S.stats, { resets:S.stats.resets+1 }), nextId:S.nextId };
   if(!bot) keep.log = [];
   S = fresh(keep);
@@ -1934,6 +1935,7 @@ function openSettings(){
     '<div class="set-row"><span>sound</span><button class="tog'+(S.settings.mute ? "" : " on")+'" id="set-mute">'+(S.settings.mute ? "off" : "on")+'</button></div>'+
     '<div class="set-row"><span>effects volume</span><input id="set-vol" type="range" min="0" max="100" value="'+(S.settings.vol!=null ? S.settings.vol : 70)+'"></div>'+
     '<div class="set-row"><span>music <small class="note">(all the way down is off)</small></span><input id="set-music" type="range" min="0" max="100" value="'+(S.settings.music!=null ? S.settings.music : 40)+'"></div>'+
+    '<div class="set-row"><span>runs from the cancel is coming<br><span class="note">in the timeline feed, as they finish</span></span><button class="tog'+(S.settings.cancelFeed!==false ? " on" : "")+'" id="set-cancel">'+(S.settings.cancelFeed!==false ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>animated backdrop<br><span class="note">off is lighter, for a phone that lags</span></span><button class="tog'+(S.settings.bg!==false ? " on" : "")+'" id="set-bg">'+(S.settings.bg!==false ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>calm (less motion)</span><button class="tog'+(S.settings.calm ? " on" : "")+'" id="set-calm">'+(S.settings.calm ? "on" : "off")+'</button></div>'+
     '<div class="set-row"><span>her face reacts</span><button class="tog'+(S.settings.faces!==false ? " on" : "")+'" id="set-faces">'+(S.settings.faces!==false ? "on" : "off")+'</button></div>'+
@@ -1950,6 +1952,7 @@ function openSettings(){
     '<p class="note">'+(acct() ? "your network is kept on your account, and saved there every minute. sign in anywhere to pick it up." : "the game saves itself every few seconds, in this browser. sign in to keep it on your account and play it on any device.")+'</p>'+
     '<div class="row"><button class="btn small" data-close>close</button></div>');
   $("set-mute").onclick = ()=>{ S.settings.mute = !S.settings.mute; syncMute(); openSettings(); };
+  $("set-cancel").onclick = ()=>{ S.settings.cancelFeed = S.settings.cancelFeed===false; openSettings(); };
   $("set-bg").onclick = ()=>{ S.settings.bg = S.settings.bg===false; syncLook(); openSettings(); };
   $("set-calm").onclick = ()=>{ S.settings.calm = !S.settings.calm; syncLook(); openSettings(); };
   document.querySelectorAll("#modal [data-num]").forEach(b=>b.onclick = ()=>{ S.settings.num = b.dataset.num; refresh(true); renderLog(); openSettings(); });
@@ -2380,7 +2383,7 @@ function frame(){
   if(dt > 5){ catchUp(document.hidden); if(!document.hidden) refresh(true); }
   else if(dt > 0){ tick(S, dt, true); S.last = now; }
   saveT += dt; achT += dt;
-  if(achT > 1){ achT = 0; checkAch(); watch(); }
+  if(achT > 1){ achT = 0; checkAch(); watch(); cancelFeed(); }
   if(saveT > 5){ saveT = 0; save(); }
   if(S.ended && !S.endSeen && !document.hidden && !$("ending")) showEnding();
   refresh();
@@ -2557,6 +2560,37 @@ function renderAcctAll(){
   // who's playing, under their milady: there in any screenshot of the game
   const who = $("you-who"), a = online() && acct();
   if(who && who.dataset.h !== (a ? a.handle : "")){ who.dataset.h = a ? a.handle : ""; who.innerHTML = a ? whoTag(a.handle) : ""; }
+}
+
+/* ---------- the cancel is coming, in the feed: runs there as they finish, each a way over to play ----------
+   Read from the cancel's own public feed of finished runs, every couple of minutes while the game is in front.
+   The first look only notes where things stand (no backlog); after that, up to three new runs a look, oldest first. */
+const CANCEL_SITE = "https://cancel.tylerirl.com/";
+let cancelAt = 0;
+async function cancelFeed(){
+  if(!online() || document.hidden || !S || !S.started || S.settings.cancelFeed===false || Date.now() - cancelAt < 115000) return;
+  cancelAt = Date.now();
+  const r = await api("/api/recent?limit=10");
+  if(r.status!==200 || !r.data || !Array.isArray(r.data.runs)) return;
+  const runs = r.data.runs.filter(x=>x && +x.at > 0).sort((a, b)=>a.at - b.at);
+  if(!runs.length) return;
+  if(!S.cancelSeen){ S.cancelSeen = runs[runs.length-1].at; return; }
+  const fresh = runs.filter(x=>x.at > S.cancelSeen);
+  if(!fresh.length) return;
+  S.cancelSeen = fresh[fresh.length-1].at;
+  // the feed reads newest first: the "and more" goes in first, so it sits under the runs it's about
+  if(fresh.length > 3) log("⚔️ …and "+(fresh.length-3)+" more runs on <a href=\""+CANCEL_SITE+"\" target=\"_blank\" rel=\"noopener\">the cancel is coming ↗</a>", "cancel");
+  for(const x of fresh.slice(-3)) log(cancelLine(x), "cancel");
+}
+function cancelLine(x){
+  const me = online() && acct() && x.handle && acct().handle===x.handle;
+  const who = me ? "you" : "<b>"+esc(x.handle ? (isShip(x.handle) ? x.handle : "~"+x.handle) : (x.name || "someone"))+"</b>";
+  const how = x.endless ? "w"+(me ? "ere" : "as")+" run down on night "+(+x.day||1)+" in terminally online"
+    : x.win ? "saved the timeline"+(+x.day && x.day < 9 ? " on day "+x.day : "")
+    : "w"+(me ? "ere" : "as")+" cancelled on day "+(+x.day||1)+(x.killedBy && x.killedBy!=="giving up" ? " by "+esc(x.killedBy) : "");
+  const link = /^https:\/\/[a-z0-9.-]+\/r\/[a-z0-9]{8}$/.test(x.share||"") ? x.share : CANCEL_SITE;
+  const cta = x.daily ? "play today's map" : x.seed ? "play this map" : "play the cancel";
+  return (x.win ? "👑 " : "⚔️ ")+who+" "+how+" · "+fmt(+x.score||0)+" drip · <a href=\""+esc(link)+"\" target=\"_blank\" rel=\"noopener\">"+cta+" ↗</a>";
 }
 
 /* ---------- beside your milady: who you are, whether it's on your account yet, and how it's going ---------- */
