@@ -67,7 +67,7 @@ def render(c, seed="x"):
     clip = Image.new("L", (400, 500), 0)
     ImageDraw.Draw(clip).rounded_rectangle((0, 0, 399, 499), 12, fill=255)
     cv.paste(panel, (50, 60), clip)
-    edge = GOLD if c["kind"] == "online" or any(r["rank"] == 1 for r in c.get("ranks", [])) else CYAN
+    edge = GOLD if c["kind"] == "online" or c.get("rank") == 1 or any(r["rank"] == 1 for r in c.get("ranks", [])) else CYAN
     d.rounded_rectangle((50, 60, 450, 560), 12, outline=edge + (170,), width=2)
 
     def text(t, x, y, px, color, weight="Bold"):
@@ -105,6 +105,20 @@ def render(c, seed="x"):
         color = GREEN
         sub = "run %d · peak %s miladys · %d market cycle%s · +%s grass" % (c["n"], short(c["peak"]), c["cycles"], "" if c["cycles"] == 1 else "s", short(c["grass"]))
         nn = "under %s, not beaten" % c["challenge"] if c.get("challenge") and not c.get("beaten") else ""
+    elif k == "board":  # a place on a board, and what set it
+        dd, b = c.get("detail") or {}, c["b"]
+        head, color = "#%d %s" % (c["rank"], c["board"]), MEDAL.get(c["rank"], CYAN)
+        if b == "fastest" or b.startswith("ch_"):
+            sub = c["value"] + ("  ·  run %d · peak %s miladys · %d cycle%s" % (dd["n"], short(dd.get("peak", 0)), dd.get("cycles", 0), "" if dd.get("cycles") == 1 else "s") if dd.get("n") else "")
+        elif b == "network":
+            sub = c["value"] + (" at once  ·  run %d" % dd["n"] if dd.get("n") else "")
+        elif b == "grass":
+            sub = c["value"] + (" earned signed in  ·  %s runs" % short(dd["runs"]) if dd.get("runs") is not None else "")
+        elif b == "online":
+            sub = "turned on the new internet " + c["value"] + (" · after %d day%s" % (dd["days"], "" if dd["days"] == 1 else "s") if dd.get("days") else "")
+        else:
+            sub = c["value"] + " past the ending"
+        nn = "of %d on the board" % c["total"]
     else:
         head, color = "turned on the new internet", CYAN
         sub = "after %d day%s and %s runs" % (c["days"], "" if c["days"] == 1 else "s", short(c["runs"]))

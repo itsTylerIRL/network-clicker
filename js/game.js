@@ -2674,8 +2674,8 @@ function fillFaces(box){
 /* anyone on a board or in the feed opens their card (their name is a link of its own, and still goes where it goes) */
 function wireProfiles(box){
   box.querySelectorAll("[data-h]").forEach(e=>{ e.classList.add("tap"); e.tabIndex = 0;
-    e.onclick = ev=>{ if(!ev.target.closest("a")) openProfile(e.dataset.h); };
-    e.onkeydown = ev=>{ if(ev.key==="Enter" && !ev.target.closest("a")) openProfile(e.dataset.h); }; });
+    e.onclick = ev=>{ if(!ev.target.closest("a, button")) openProfile(e.dataset.h); }; // a share button inside does its own thing
+    e.onkeydown = ev=>{ if(ev.key==="Enter" && !ev.target.closest("a, button")) openProfile(e.dataset.h); }; });
 }
 const agoShort = at => { const m = Math.max(0, Math.round((Date.now()/1000-at)/60)); return m<1 ? "now" : m<60 ? m+"m" : m<1440 ? Math.round(m/60)+"h" : Math.round(m/1440)+"d"; };
 const feedSkeleton = () => '<div class="brows skel" aria-busy="true">'+'<div class="brow"><i></i><span class="bface"></span><b></b><em></em></div>'.repeat(8)+'</div>';
@@ -2704,11 +2704,13 @@ function drawBoard(k, d){
     return '<div class="pod p'+n+(r.me ? " me" : "")+'" data-h="'+esc(r.handle)+'">'+(n===1 ? '<u class="crown">👑</u>' : "")+boardFace(r.look, "big")+'<s>'+MEDAL[n-1]+'</s>'+
       '<b class="who">'+whoTag(r.handle)+'</b><em>'+v+'</em><span>'+sub+'</span><div class="plinth">'+n+'</div></div>'; };
   const row = r => { const [v, sub] = boardValue(k, r);
-    return '<div class="brow'+(r.me ? " me" : "")+'" data-h="'+esc(r.handle)+'"><i>'+r.rank+'</i>'+boardFace(r.look)+'<b>'+whoTag(r.handle)+(r.me ? ' <u>you</u>' : "")+'</b><em>'+v+'<span>'+sub+'</span></em></div>'; };
+    return '<div class="brow'+(r.me ? " me" : "")+'" data-h="'+esc(r.handle)+'"><i>'+r.rank+'</i>'+boardFace(r.look)+'<b>'+whoTag(r.handle)+(r.me ? ' <u>you</u>' : "")+'</b><em>'+v+'<span>'+sub+'</span></em>'+
+      (r.me ? '<button class="pshare" data-share-board="'+k+'" title="share this place on the board" aria-label="share this place on the board">📸</button>' : "")+'</div>'; };
   const me = d.me, gap = me ? boardGap(k, me) : "";
   const mine = me ? '<div class="board-you'+(me.rank<=3 ? " top" : "")+'"'+(acct() ? ' data-h="'+esc(acct().handle)+'"' : "")+'>'+boardFace(me.look)+
       '<div><u>your standing</u><b>#'+me.rank+' <small>of '+d.total+'</small></b>'+(gap ? '<span>'+gap+'</span>' : "")+'</div>'+
-      '<em>'+boardValue(k, Object.assign({ detail:{} }, me, (d.rows.find(r=>r.me)||{})))[0]+'</em></div>' : "";
+      '<em>'+boardValue(k, Object.assign({ detail:{} }, me, (d.rows.find(r=>r.me)||{})))[0]+'</em>'+
+      '<button class="pshare" data-share-board="'+k+'" title="share this place on the board" aria-label="share this place on the board">📸</button></div>' : "";
   box.innerHTML = (d.rows.length ? "" : '<p class="note board-empty">nobody yet. the top spot is open.</p>')+
     '<div class="podium">'+[2,1,3].map(pod).join("")+'</div>'+mine+
     (d.rows.length > 3 ? '<div class="brows">'+d.rows.slice(3).map(row).join("")+'</div>' : "")+
@@ -2751,13 +2753,16 @@ async function openProfile(handle){
 
 /* ---------- sharing: a card of your network, a run, or the ending, drawn by the service from what it holds ---------- */
 const shareBtn = n => '<button class="ln-share" data-share-run="'+n+'">share it 📸</button>';
-document.addEventListener("click", e=>{ const b = e.target.closest("[data-share-run]"); if(b){ e.stopPropagation(); shareCard("run", +b.dataset.shareRun); } });
+document.addEventListener("click", e=>{
+  const b = e.target.closest("[data-share-run]"); if(b){ e.stopPropagation(); shareCard("run", +b.dataset.shareRun); }
+  const p = e.target.closest("[data-share-board]"); if(p){ e.stopPropagation(); shareCard("board", null, p.dataset.shareBoard); } // your place on a board, and the run that set it
+});
 async function synced(){ // the service has to have it before it can put it on a card
   for(let i=0; syncing && i<40; i++) await new Promise(r=>setTimeout(r, 250));
   await syncUp();
 }
 const SITE_URL = "https://clicker.tylerirl.com/";
-async function shareCard(kind, n){
+async function shareCard(kind, n, b){
   const a = acct();
   if(!a || !online()){ // no account, no card: the words and the game
     const text = kind==="online" ? "i turned on the new internet" : kind==="run" ? "i touched grass in the network is growing" : "my network is growing: "+fmt(S.miladys.length)+" miladys";
@@ -2765,7 +2770,7 @@ async function shareCard(kind, n){
   }
   openModal('<h2>share</h2><div class="share-card skel"><i></i></div><p class="note" id="share-note">making your card…</p>');
   await synced();
-  const r = await api("/api/net/card", { session:a.token, kind, n });
+  const r = await api("/api/net/card", { session:a.token, kind, n, b });
   if($("modal").classList.contains("hidden") || !$("share-note")) return;
   if(r.status!==200) return $("share-note").textContent = r.status===429 ? "that's a lot of cards. try again in a bit." : r.status===404 ? "the service doesn't have that yet. try again in a minute." : "the card can't be made right now.";
   shareSheet(r.data);

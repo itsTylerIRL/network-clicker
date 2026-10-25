@@ -705,7 +705,7 @@ a.vtag:hover b{text-decoration:underline;}
 .bface img{display:block;width:100%;height:100%;opacity:0;transition:opacity .35s;} .bface.ready img{opacity:1;}
 .bface>i{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-style:normal;font-size:16px;color:var(--dim);}
 .bface.big>i{font-size:32px;}
-.board-you{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;margin:4px 0 12px;padding:10px 12px;border:1px solid rgba(80,250,123,.5);border-radius:8px;
+.board-you{display:grid;grid-template-columns:52px minmax(0,1fr) auto auto;gap:12px;align-items:center;margin:4px 0 12px;padding:10px 12px;border:1px solid rgba(80,250,123,.5);border-radius:8px;
   background:linear-gradient(90deg,rgba(80,250,123,.09),rgba(80,250,123,.02));box-shadow:0 0 18px rgba(80,250,123,.12);}
 .board-you .bface{width:52px;border-color:var(--acid);}
 .board-you>div{display:flex;flex-direction:column;gap:1px;min-width:0;}
@@ -722,6 +722,7 @@ a.vtag:hover b{text-decoration:underline;}
 .brow>b{min-width:0;display:flex;align-items:center;gap:6px;font-weight:normal;}
 .brow>b u{text-decoration:none;font-size:9px;padding:1px 5px;border-radius:3px;background:var(--acid);color:#000;}
 .brow em{font-style:normal;text-align:right;font-variant-numeric:tabular-nums;} .brow em span{display:block;font-size:10px;color:var(--dim);}
+.brow.me{grid-template-columns:30px 34px minmax(0,1fr) auto 30px;} .board-you .pshare,.brow .pshare{justify-self:end;}
 .brow.me{border-color:var(--acid);background:rgba(80,250,123,.08);box-shadow:0 0 14px rgba(80,250,123,.15);} .brow.me>i{color:var(--acid);}
 .board-empty{text-align:center;margin-top:14px;}
 .skel .bface,.skel b,.skel em,.skel .brow>i{background:linear-gradient(110deg,#0c1a20 30%,#1d4450 50%,#0c1a20 70%) 0 0/250% 100%;animation:skel 1.2s linear infinite;border-color:transparent;box-shadow:none;}
@@ -792,7 +793,7 @@ body.calm .pod,body.calm .pod .crown,body.calm .pod .bface::after,body.calm .bro
   .podium{gap:6px;} .pod .who{font-size:10px;} .pod .who .vtag img,.pod .who .vtag svg{display:none;} .pod em{font-size:12px;} .pod.p1 em{font-size:14px;}
   .pod>span:not(.bface){display:none;} .pod.p1 .plinth{height:56px;} .pod.p2 .plinth{height:38px;} .pod.p3 .plinth{height:26px;}
   .brow{grid-template-columns:24px 30px minmax(0,1fr) auto;gap:8px;padding:5px 8px;font-size:12px;} .brow .bface{width:30px;} .brow em span{display:none;}
-  .board-you{grid-template-columns:44px minmax(0,1fr) auto;} .board-you .bface{width:44px;}
+  .board-you{grid-template-columns:44px minmax(0,1fr) auto auto;} .brow.me{grid-template-columns:24px 30px minmax(0,1fr) auto 28px;} .board-you .bface{width:44px;}
 }
 
 /* who's signed in, under their milady */

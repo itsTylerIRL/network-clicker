@@ -11,7 +11,8 @@ same signed session works here, so a player is the same person in both games. Ro
   GET  /api/net/summary    ?player=                  -> a few numbers about the account's network, and who they play as, for the cancel game's card
   GET  /api/net/recent     [?limit=]                 -> what's happened lately: runs finished, challenges beaten, the new internet turned on, epochs
   GET  /api/net/profile    ?h=handle                 -> a player's card: their network, where they stand on every board, their last runs
-  POST /api/net/card       {session, kind, n?}       -> a share card of your network (net), a run (run, n) or the ending (online)
+  POST /api/net/card       {session, kind, n?, b?}   -> a share card of your network (net), a run (run, n), your place on a board (board, b)
+                                                         or the ending (online)
   GET  /api/net/card/ID.png                          -> the card's picture, drawn here (net_card.py), never uploaded
   GET  /api/net/s/ID                                 -> its share link: link previews get the card, people are sent to the game
 Shared, they're games.tylerirl.com/n/ID and /n/ID.png: a short name of their own that nginx sends here
@@ -449,7 +450,7 @@ def board_label(b, value, total):
     return {"board": name, "value": "%s · of %d" % (v, total)}
 
 
-def card_data(con, player, handle, kind, n):
+def card_data(con, player, handle, kind, n, b=None):
     """What a card shows, from what this service holds. None if there's nothing to show (a run it doesn't have,
     an ending that hasn't happened)."""
     row = con.execute("SELECT data FROM net_saves WHERE player=?", (player,)).fetchone()
@@ -475,6 +476,17 @@ def card_data(con, player, handle, kind, n):
                  # the places this run holds: its time, or its peak, is the one on the board
                  ranks=chips([b for b in r if (b == ("ch_" + ch if ch and run.get("beaten") else "fastest" if not ch else None) and r[b]["value"] == round(g(run, "t"), 1))
                               or (b == "network" and r[b]["value"] == g(run, "peak"))]))
+    elif kind == "board":
+        # your place on one board, and what set it: the run, for the boards a run sets (its number, cycles and peak
+        # were kept with the place), or what the place counts
+        row = con.execute("SELECT value, detail FROM net_board WHERE board=? AND player=?", (b, player)).fetchone() if b and board_kind(b) else None
+        if not row or b not in r:
+            return None
+        d = json.loads(row["detail"]) or {}
+        lab = board_label(b, row["value"], total(b))
+        c.update(b=b, board=lab["board"], rank=r[b]["rank"], total=total(b), value=lab["value"].split(" · ")[0],
+                 detail={k: d.get(k) for k in ("n", "cycles", "peak", "grass", "runs", "days", "e") if d.get(k) is not None},
+                 ranks=[])  # the place is the headline: no chip repeating it
     elif kind == "online":
         if not s.get("ended"):
             return None
@@ -495,6 +507,8 @@ def card_words(c):
     if c["kind"] == "run":
         what = "beat %s in %s" % (c["challenge"], clock(c["t"])) if c["beaten"] else "touched grass after %s" % clock(c["t"])
         return ("%s %s" % (who, what), "%s with %s miladys at the peak" % (what, format(c["peak"], ",")))
+    if c["kind"] == "board":
+        return ("%s: #%d %s" % (who, c["rank"], c["board"]), "#%d %s: %s (of %d)" % (c["rank"], c["board"], c["value"], c["total"]))
     return ("%s turned on the new internet" % who, "i turned on the new internet, after %d day%s" % (c["days"], "" if c["days"] == 1 else "s"))
 
 
@@ -517,13 +531,14 @@ def card_post(h):
         return h.send(401, {"error": "sign in first"})
     kind = d.get("kind")
     n = d.get("n") if isinstance(d.get("n"), int) and not isinstance(d.get("n"), bool) else None
-    if kind not in ("net", "run", "online") or (kind == "run" and n is None):
+    b = d.get("b") if isinstance(d.get("b"), str) and len(d.get("b")) <= 40 else None
+    if kind not in ("net", "run", "online", "board") or (kind == "run" and n is None) or (kind == "board" and not (b and board_kind(b))):
         return h.send(400, {"error": "which card?"})
     if not H["rate_ok"]("netcard:" + player, CARDS_PER_HOUR):
         return h.send(429, {"error": "slow down"})
     now = int(time.time())
     with H["db"]() as con:
-        c = card_data(con, player, handle, kind, n)
+        c = card_data(con, player, handle, kind, n, b)
         if not c:
             return h.send(404, {"error": "nothing to put on a card yet"})
         raw = json.dumps(c, separators=(",", ":"), sort_keys=True)
