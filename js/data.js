@@ -363,9 +363,11 @@ const T2_TECH = [
   { id:"consensus", name:"consensus",          cost:{memory:2000},                fx:{epochCost:-0.2},       desc:"epochs ask 20% less." },
   { id:"affinage",  name:"affinage",           cost:{trust:2e4, memory:5000},     fx:{"t2mult.cheese":0.5},  desc:"+50% 🧀. it's all in the waiting." },
 ];
-/* CHEESEWORLD: cheese given away, a level at a time, each half again the last. No last level. It shows on your
-   profile in the cancel is coming as a cheese patron badge, and outside the daily you start its runs with a little
-   more $CULT: ten times the square root of your level (+10, +20 at 4, +30 at 9). */
+/* CHEESEWORLD: cheese given away, a level at a time, each half again the last. No last level, but it's a week's
+   worth: the levels start again when the cancel's week does (as Sunday night ends, Eastern), so nobody's ahead for
+   good, and the week's levels become beetles 🪲, kept forever as a count of every level ever given. The level shows on
+   your profile in the cancel is coming as a cheese patron badge, and outside the daily you start its runs with a
+   little more $CULT: ten times the square root of your level (+10, +20 at 4, +30 at 9). */
 const CHEESE_BASE = 100, CHEESE_GROW = 1.5;
 const cheeseCost = lv => Math.round(CHEESE_BASE*Math.pow(CHEESE_GROW, lv));
 const cheeseCult = lv => Math.round(10*Math.sqrt(lv));
@@ -498,7 +500,8 @@ const ACHIEVEMENTS = [
   { id:"uplinked", name:"uplinked",            desc:"build an uplink.",                   test:s=>!!(s.t2 && s.t2.b.uplink) },
   { id:"protocols",name:"rfc compliant",       desc:"research every protocol.",           test:s=>!!s.t2 && T2_TECH.every(t=>s.t2.tech[t.id]) },
   { id:"cheese",   name:"say cheese",          desc:"give cheese to CHEESEWORLD.",        test:s=>!!(s.t2 && s.t2.cheeseLv) },
-  { id:"cheese10", name:"big cheese",          desc:"reach cheese patron level 10.",      test:s=>!!(s.t2 && s.t2.cheeseLv >= 10) },
+  { id:"cheese10", name:"big cheese",          desc:"reach cheese patron level 10 in a week.", test:s=>!!(s.t2 && s.t2.cheeseLv >= 10) },
+  { id:"beetles",  name:"beetlemania",         desc:"keep 25 beetles.",                    test:s=>!!(s.t2 && s.t2.beetles >= 25) },
 ];
 
 const NAMES = ["Miyu","Lain","Sakura","Remi","Yuki","Hana","Momo","Kiki","Nana","Rin","Aoi","Mika","Luna","Coco","Pika","Suki",

@@ -30,6 +30,7 @@ while and make plausible grass, and grass can't be spent that wasn't earned. The
 while the account was syncing, so a save edited before it was linked can't put anything on them.
 """
 import base64, hashlib, json, math, os, re, threading, time, zlib
+from datetime import datetime, timedelta, timezone
 
 H = {}  # the host service's helpers: db, read_session, verified_player, rate_ok, clean_text, rn_on, ur_on
 
@@ -45,6 +46,17 @@ GRASS_FREE = 200
 STAGES_PER_10MIN = 1       # stages of the new internet, at most, per ten minutes between syncs (plus one)
 EPOCHS_PER_10MIN = 10      # and epochs past the ending (each asks for half again the last, so a quick one is a cheap one)
 CHEESE_PER_HOUR = 3        # cheese patron levels, at most, per hour between syncs (plus one): the badge and $CULT it means are in the other game
+try:  # cheese levels are a week's worth, the cancel's week: it turns over as Sunday night ends in New York
+    from zoneinfo import ZoneInfo
+    WEEK_TZ = ZoneInfo("America/New_York")
+except Exception:
+    WEEK_TZ = timezone.utc
+
+
+def cheese_week(at=None):
+    """The week a cheese level counts in: the Monday it began on, as the cancel keys its hill (server.py, hill_week)."""
+    d = datetime.fromtimestamp(at if at is not None else time.time(), WEEK_TZ).date()
+    return (d - timedelta(days=d.weekday())).isoformat()
 PERK_COST = {}             # perk id -> grass, from net_spec.json
 CHALLENGE_IDS = set()      # each challenge has a board of its own (ch_<id>), from net_spec.json too
 RECENT_KEEP = 300          # the feed keeps this many things that happened
@@ -81,7 +93,8 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS net_saves (
   player TEXT PRIMARY KEY, handle TEXT NOT NULL, data BLOB NOT NULL, rev INTEGER NOT NULL,
   saved INTEGER NOT NULL, linked INTEGER NOT NULL, linked_n INTEGER NOT NULL DEFAULT 0, linked_played REAL NOT NULL DEFAULT 0,
-  grass_total REAL NOT NULL DEFAULT 0, linked_e INTEGER NOT NULL DEFAULT 0, cheese INTEGER NOT NULL DEFAULT 0
+  grass_total REAL NOT NULL DEFAULT 0, linked_e INTEGER NOT NULL DEFAULT 0, cheese INTEGER NOT NULL DEFAULT 0,
+  cheese_week TEXT NOT NULL DEFAULT '', beetles INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS net_board (
   board TEXT NOT NULL, player TEXT NOT NULL, handle TEXT NOT NULL, value REAL NOT NULL, detail TEXT NOT NULL, at INTEGER NOT NULL,
@@ -116,6 +129,9 @@ def setup(helpers):
             con.execute("ALTER TABLE net_saves ADD COLUMN linked_e INTEGER NOT NULL DEFAULT 0")
         if "cheese" not in cols:  # and cheese later still
             con.execute("ALTER TABLE net_saves ADD COLUMN cheese INTEGER NOT NULL DEFAULT 0")
+        if "beetles" not in cols:  # and then cheese by the week, and beetles for the weeks gone
+            con.execute("ALTER TABLE net_saves ADD COLUMN cheese_week TEXT NOT NULL DEFAULT ''")
+            con.execute("ALTER TABLE net_saves ADD COLUMN beetles INTEGER NOT NULL DEFAULT 0")
 
 
 class Refused(Exception):
@@ -190,6 +206,10 @@ def shape(s):
     for k in ("uplink", "seedbank"):
         num(g(s, "t2", "b", k), 0, 1e4)
     num(g(s, "t2", "cheeseLv"), 0, 1e5)
+    num(g(s, "t2", "beetles"), 0, 1e7)
+    wk = g(s, "t2", "cheeseWeek", default="")
+    if not isinstance(wk, str) or (wk and not re.match(r"^\d{4}-\d{2}-\d{2}$", wk)):
+        raise Refused("a week out of shape")
     for r in s["history"]:
         if not isinstance(r, dict):
             raise Refused("a run is out of shape")
@@ -260,9 +280,23 @@ def check(prev, cur, dt, since_link, linked_played):
         raise Refused("epochs before the ending")
     if g(cur, "nn", "e") - g(prev, "nn", "e") > 1 + EPOCHS_PER_10MIN * dt / 600:
         raise Refused("the new internet went up too fast")
-    if g(cur, "t2", "cheeseLv") < g(prev, "t2", "cheeseLv"):
+    # cheese: a week's worth of levels. Within a week they only go up, and not too fast; when the week turns, every
+    # level of the last becomes a beetle, exactly, and the levels start again
+    pw, cw = g(prev, "t2", "cheeseWeek", default=""), g(cur, "t2", "cheeseWeek", default="")
+    lv_p, lv_c, bt_p, bt_c = g(prev, "t2", "cheeseLv"), g(cur, "t2", "cheeseLv"), g(prev, "t2", "beetles"), g(cur, "t2", "beetles")
+    if cw and cw > cheese_week(time.time() + CLOCK_SLACK):
+        raise Refused("a week that hasn't come")
+    if pw and cw != pw:
+        if cw < pw:
+            raise Refused("the week went backwards")
+        if bt_c != bt_p + lv_p:
+            raise Refused("beetles don't add up")
+        lv_p = 0  # a fresh week: the levels start again
+    elif bt_c != bt_p:
+        raise Refused("beetles don't add up")
+    if lv_c < lv_p:
         raise Refused("cheese went backwards")
-    if g(cur, "t2", "cheeseLv") - g(prev, "t2", "cheeseLv") > 1 + CHEESE_PER_HOUR * dt / 3600:
+    if lv_c - lv_p > 1 + CHEESE_PER_HOUR * dt / 3600:
         raise Refused("cheese given too fast")
     runs = new_runs(g(P, "resets"), cur)
     resets = g(N, "resets") - g(P, "resets")
@@ -400,15 +434,24 @@ def summary(player):
     s = unpack_stored(row["data"])
     return {"ok": True, "started": True, "saved": row["saved"], "miladys": len(s.get("miladys") or []),
             "runs": int(g(s, "stats", "resets")), "stage": int(g(s, "nn", "i")), "online": bool(s.get("ended")),
-            "played": round(g(s, "stats", "played")), "look": look(s), "ranks": r, "cheese": int(g(s, "t2", "cheeseLv"))}
+            "played": round(g(s, "stats", "played")), "look": look(s), "ranks": r,
+            **dict(zip(("cheese", "beetles"), cheese_now(int(g(s, "t2", "cheeseLv")), g(s, "t2", "cheeseWeek", default=""), int(g(s, "t2", "beetles")))))}
+
+
+def cheese_now(lv, week, beetles):
+    """(this week's level, beetles) from what a save last said: a level from a week that's over counts for nothing now,
+    and is already beetles in all but name (the game turns it over the next time it's opened)."""
+    if week and week != cheese_week():
+        return 0, beetles + lv
+    return lv, beetles
 
 
 def cheese_of(player):
-    """The cheese patron level an account has reached, as of its last synced save: the cancel's server holds a run's
-    claimed level to this, so a run's badge is never more than the player had given when they played it."""
+    """The cheese patron level an account has reached this week, as of its last synced save: the cancel's server holds
+    a run's claimed level to this, so a run's badge is never more than the player had given when they played it."""
     with H["db"]() as con:
-        row = con.execute("SELECT cheese FROM net_saves WHERE player=?", (player,)).fetchone()
-    return row["cheese"] if row else 0
+        row = con.execute("SELECT cheese, cheese_week, beetles FROM net_saves WHERE player=?", (player,)).fetchone()
+    return cheese_now(row["cheese"], row["cheese_week"], row["beetles"])[0] if row else 0
 
 
 def recent(limit):
@@ -431,7 +474,7 @@ def profile(handle):
             "miladys": len(s.get("miladys") or []), "runs": int(g(s, "stats", "resets")), "played": round(g(s, "stats", "played")),
             "stage": int(g(s, "nn", "i")), "epochs": int(g(s, "nn", "e")), "online": g(s, "ended") or None,
             "grass": round(row["grass_total"]), "ach": len(s.get("ach") or {}), "relics": {k: v for k, v in s["relics"].items() if v},
-            "cheese": int(g(s, "t2", "cheeseLv")),
+            **dict(zip(("cheese", "beetles"), cheese_now(int(g(s, "t2", "cheeseLv")), g(s, "t2", "cheeseWeek", default=""), int(g(s, "t2", "beetles"))))),
             "wonder": int(g(s, "wonder")), "challenges": sorted(k for k, v in (s.get("chDone") or {}).items() if v),
             "ranks": {b: dict(v, total=totals[b]) for b, v in r.items()}, "last": runs}
 
@@ -730,10 +773,12 @@ def store(player, handle, cur, base, now):
         grass_total = (row["grass_total"] if row else 0) + earned
         linked_e = row["linked_e"] if row else int(g(cur, "nn", "e"))
         rev = (row["rev"] if row else 0) + 1
-        con.execute("""INSERT INTO net_saves (player, handle, data, rev, saved, linked, linked_n, linked_played, grass_total, linked_e, cheese) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+        con.execute("""INSERT INTO net_saves (player, handle, data, rev, saved, linked, linked_n, linked_played, grass_total, linked_e, cheese, cheese_week, beetles)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                        ON CONFLICT(player) DO UPDATE SET handle=excluded.handle, data=excluded.data, rev=excluded.rev, saved=excluded.saved,
-                       grass_total=excluded.grass_total, cheese=excluded.cheese""",
-                    (player, handle, pack(cur), rev, now, linked, linked_n, linked_played, grass_total, linked_e, int(g(cur, "t2", "cheeseLv"))))
+                       grass_total=excluded.grass_total, cheese=excluded.cheese, cheese_week=excluded.cheese_week, beetles=excluded.beetles""",
+                    (player, handle, pack(cur), rev, now, linked, linked_n, linked_played, grass_total, linked_e,
+                     int(g(cur, "t2", "cheeseLv")), g(cur, "t2", "cheeseWeek", default="") or "", int(g(cur, "t2", "beetles"))))
         score_boards(con, player, handle, prev, cur, runs, earned, linked_n, grass_total, now, linked_e)
         return 200, {"ok": True, "rev": rev, "ranks": ranks(con, player), "linked": linked}
 
