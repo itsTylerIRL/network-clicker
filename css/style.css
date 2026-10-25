@@ -682,7 +682,10 @@ a.vtag:hover b{text-decoration:underline;}
 /* the boards: the top three on a podium, where you stand, then everyone else */
 .board-pick{margin-bottom:6px;}
 .board-n{font-weight:normal;color:var(--neon);white-space:nowrap;}
-#board-list{max-width:640px;}
+/* one centered column, however wide the window: the picker, what the board is, the podium and the list on one axis */
+.boards{max-width:860px;margin:0 auto;}
+.boards .board-pick,.boards .board-sub{justify-content:center;}
+#board-what{text-align:center;}
 .podium{display:grid;grid-template-columns:1fr 1.18fr 1fr;align-items:end;gap:10px;margin:22px 0 14px;}
 .pod{--c:189,147,249;position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;text-align:center;animation:podup .55s cubic-bezier(.2,.9,.3,1.2) backwards;}
 .pod.p1{--c:241,250,140;animation-delay:.18s;} .pod.p2{--c:200,214,222;} .pod.p3{--c:255,184,108;animation-delay:.09s;}

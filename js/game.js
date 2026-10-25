@@ -2594,11 +2594,11 @@ const boardFace = (l, cls) => { const f = boardLook(l);
   return '<span class="bface '+(cls||"")+'">'+(f ? '<img alt="" data-look="'+esc(JSON.stringify(f))+'">' : '<i>🌸</i>')+'</span>'; };
 function buildBoards(body){
   const group = boardKey.startsWith("ch_") ? "ch" : boardKey;
-  body.innerHTML = '<div class="board-pick seg wrap">'+Object.keys(BOARD_INFO).map(k=>'<button class="pick'+(k===group ? " on" : "")+'" data-board="'+k+'">'+BOARD_INFO[k][0]+'</button>').join("")+'</div>'+
+  body.innerHTML = '<div class="boards"><div class="board-pick seg wrap">'+Object.keys(BOARD_INFO).map(k=>'<button class="pick'+(k===group ? " on" : "")+'" data-board="'+k+'">'+BOARD_INFO[k][0]+'</button>').join("")+'</div>'+
     (group==="ch" ? '<div class="board-sub seg wrap">'+CHALLENGES.map(c=>'<button class="pick'+("ch_"+c.id===boardKey ? " on" : "")+'" data-board="ch_'+c.id+'">'+c.name+'</button>').join("")+'</div>' : "")+
     '<p class="note" id="board-what">'+boardInfo(boardKey)[1]+'.</p><div id="board-list">'+(boardKey==="recent" ? feedSkeleton() : boardSkeleton())+'</div>'+
     '<div class="acct-row" id="acct-boards"></div>'+
-    '<p class="note">only verified players are on the boards, and only runs started after signing in count. the game runs on your device, so the service checks every save against the last one it took: time can\'t go faster than it does, and everything has to add up.</p>';
+    '<p class="note">only verified players are on the boards, and only runs started after signing in count. the game runs on your device, so the service checks every save against the last one it took: time can\'t go faster than it does, and everything has to add up.</p></div>';
   body.querySelectorAll("[data-board]").forEach(b=>b.onclick = ()=>{
     const k = b.dataset.board;
     if(k.startsWith("ch_")) boardCh = k.slice(3);
