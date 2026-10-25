@@ -1198,12 +1198,15 @@ function buildMiladys(body){
     const row = el("div", "job");
     row.dataset.j = j.id;
     row.innerHTML = '<div class="jn"><b>'+j.icon+" "+j.name+NEW_LAYER(j)+'</b><span>'+j.desc+'</span><span class="jr"></span></div>'+
-      '<div class="jc"><button class="btn small" data-d="-1" title="shift: 10">−</button><b class="jcount">0</b><button class="btn small" data-d="1" title="shift: 10">+</button>'+
-      '<button class="btn small all" data-d="all" title="every idle milady">all</button></div>';
-    row.querySelectorAll("button").forEach(btn=>btn.onclick = e=>{
-      if(btn.dataset.d==="all") return assign(j.id, R.jobs.idle);
-      const n = e.shiftKey ? 10 : 1;
-      btn.dataset.d==="1" ? assign(j.id, n) : unassign(j.id, n);
+      // take off on the left, put on on the right: one, five, ten, or all of them
+      '<div class="jc"><span class="jstep minus">'+["max", 10, 5, 1].map(n=>'<button class="btn small" data-d="-'+n+'" title="'+(n==="max" ? "everyone on this job back to idle" : "take "+n+" off")+'">'+(n==="max" ? "max" : "−"+n)+'</button>').join("")+'</span>'+
+      '<b class="jcount">0</b>'+
+      '<span class="jstep plus">'+[1, 5, 10, "max"].map(n=>'<button class="btn small" data-d="'+n+'" title="'+(n==="max" ? "every idle milady" : "put "+n+" on")+'">'+(n==="max" ? "max" : "+"+n)+'</button>').join("")+'</span></div>';
+    row.querySelectorAll("button").forEach(btn=>btn.onclick = ()=>{
+      const d = btn.dataset.d;
+      if(d==="max") return assign(j.id, R.jobs.idle);
+      if(d==="-max") return unassign(j.id, Infinity);
+      +d > 0 ? assign(j.id, +d) : unassign(j.id, -d);
     });
     list.appendChild(row);
   }
@@ -1762,8 +1765,8 @@ function update(){
     row.querySelector(".jcount").textContent = cnt;
     const each = j.res ? j.rate*(1+(R.f["job."+j.id]||0))*R.happy : 0; // a milady's share; a remilio makes more
     row.querySelector(".jr").innerHTML = j.res ? fmt(each, each<1 ? 3 : 2)+" "+resIcon(j.res)+"/s each, before bonuses" : "";
-    row.querySelector('[data-d="1"]').disabled = row.querySelector('[data-d="all"]').disabled = !R.jobs.idle;
-    row.querySelector('[data-d="-1"]').disabled = !cnt;
+    row.querySelectorAll(".plus button").forEach(b=>b.disabled = !R.jobs.idle);
+    row.querySelectorAll(".minus button").forEach(b=>b.disabled = !cnt);
   });
   if($("pop-count")){
     $("pop-count").textContent = n+" / "+R.housing+" miladys";

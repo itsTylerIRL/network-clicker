@@ -226,8 +226,14 @@ h1.game-title .is{color:var(--neon);text-shadow:0 0 18px rgba(139,233,253,.9);di
 .job .jn span{font-size:11px;color:#9aa6ab;}
 .job .jn .jr{color:var(--dim);font-size:10px;}
 .job .jc{display:flex;align-items:center;gap:8px;flex:none;}
-.job .jc b{min-width:28px;text-align:center;font-size:16px;color:#fff;}
-.job .jc .btn{min-width:36px;padding:4px 0;font-size:16px;}
+.job .jc b{min-width:34px;text-align:center;font-size:16px;color:#fff;font-variant-numeric:tabular-nums;}
+/* − max 10 5 1 · count · 1 5 10 max +: two joined groups either side of the count */
+.jstep{display:inline-flex;}
+.job .jc .jstep .btn{min-width:0;padding:4px 9px;font-size:12px;border-radius:0;margin:0;letter-spacing:0;}
+.jstep .btn+.btn{border-left-width:0;}
+.jstep .btn:first-child{border-radius:var(--r) 0 0 var(--r);} .jstep .btn:last-child{border-radius:0 var(--r) var(--r) 0;}
+.jstep.minus .btn{color:#ffb3b3;} .jstep.plus .btn{color:#a9f5c0;}
+.jstep .btn:disabled{color:var(--dim);}
 .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:6px;}
 .mil{all:unset;cursor:pointer;position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--stage);}
 .mil img{width:100%;height:100%;display:block;object-fit:cover;}
@@ -544,7 +550,7 @@ button,a,select{touch-action:manipulation;} /* no double-tap zoom on anything yo
   #tabs .pick{flex:none;}
   .box-h{flex-wrap:wrap;gap:4px;}
   .job{flex-wrap:wrap;} .job .jn{flex:1 1 180px;}
-  .job .jc .btn{min-width:44px;min-height:40px;}
+  .job .jc{width:100%;justify-content:space-between;} .job .jc .jstep .btn{min-height:40px;padding:4px 8px;font-size:12px;}
   .relics{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));}
   .stage{flex-direction:column;gap:0;} .stage span{text-align:left;}
   #modal{align-items:flex-end;padding:8px;} #modal-panel{max-height:88vh;border-radius:18px 18px 10px 10px;}
@@ -584,7 +590,7 @@ button,a,select{touch-action:manipulation;} /* no double-tap zoom on anything yo
 .pick.fresh:not(.on)::before{content:"new ";font-size:9px;font-weight:bold;color:var(--pink);}
 body.calm .new-tag{animation:none;}
 /* the miladys tab */
-.job .jc .all{min-width:40px;font-size:10px;}
+
 .gal-ctl{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px;}
 .gal-ctl select{padding:5px 8px;font-size:12px;}
 /* welcome back */
